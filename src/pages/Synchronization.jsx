@@ -8,31 +8,50 @@ import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
 import Card from '../components/Card'
 import Badge from '../components/Badge'
-import { medicalCenters, syncHistory, networkStats } from '../data/mockData'
+import SyncStatusCard from '../components/SyncStatusCard'
+import api from '../services/api'
 import { cn } from '../utils/helpers'
 
 export default function Synchronization() {
   const [activeFlows, setActiveFlows] = useState([])
   const [currentTime, setCurrentTime] = useState(new Date())
+  const [data, setData] = useState({ networkStats: {}, history: [], centers: [] })
+  const [loading, setLoading] = useState(true)
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/admin/sync/dashboard')
+      setData(res.data)
+    } catch (err) {
+      console.error("Erreur sync data", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [])
 
   // Simulate active sync flows
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveFlows(prev => {
         const newFlows = [...prev]
-        if (Math.random() > 0.7 && newFlows.length < 3) {
-          const from = medicalCenters[Math.floor(Math.random() * medicalCenters.length)]
-          const to = medicalCenters.filter(c => c.id !== from.id)[Math.floor(Math.random() * (medicalCenters.length - 1))]
-          newFlows.push({ id: Date.now(), from: from.name, to: to.name, progress: 0 })
+        if (Math.random() > 0.7 && newFlows.length < 3 && data.centers.length > 1) {
+          const from = data.centers[Math.floor(Math.random() * data.centers.length)]
+          const to = data.centers.filter(c => c.id !== from.id)[Math.floor(Math.random() * (data.centers.length - 1))]
+          newFlows.push({ id: Date.now(), from: from.nom, to: to.nom, progress: 0 })
         }
         return newFlows.map(f => ({ ...f, progress: Math.min(f.progress + 10, 100) })).filter(f => f.progress < 100)
       })
       setCurrentTime(new Date())
-    }, 500)
+    }, 2000)
     return () => clearInterval(interval)
-  }, [])
+  }, [data.centers])
 
-  const onlineCenters = medicalCenters.filter(c => c.status === 'online')
+  const onlineCenters = data.centers
 
   return (
     <div className="min-h-screen bg-[#F6FAFB]">
@@ -67,26 +86,26 @@ export default function Synchronization() {
                   <span className="text-white/80 text-sm">Réseau Global</span>
                 </div>
                 <div className="flex items-end gap-2 mb-2">
-                  <span className="text-4xl font-bold">{networkStats.totalNodes}</span>
+                  <span className="text-4xl font-bold">{data.networkStats.totalNodes || 0}</span>
                   <span className="text-white/60 mb-1">noeuds</span>
                 </div>
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-[#58D6C3]" />
-                    {networkStats.activeNodes} actifs
+                    {data.networkStats.activeNodes || 0} actifs
                   </span>
                   <span className="text-white/60">
-                    Consistance: {networkStats.consistency}
+                    Consistance: {data.networkStats.consistency}
                   </span>
                 </div>
               </div>
             </Card>
 
             {[
-              { label: 'Dossiers Totaux', value: networkStats.totalRecords.toLocaleString(), icon: Database, color: 'from-[#3BA7B8] to-[#58D6C3]' },
-              { label: 'Synchronisés', value: networkStats.syncedRecords.toLocaleString(), icon: CheckCircle2, color: 'from-[#4FAF8F] to-[#58D6C3]', trend: '+234' },
-              { label: 'En attente', value: networkStats.pendingSync.toString(), icon: Clock, color: 'from-[#F4B860] to-[#D96C6C]' },
-              { label: 'Latence Moy.', value: networkStats.avgLatency, icon: Zap, color: 'from-[#0F4C5C] to-[#3BA7B8]' },
+              { label: 'Dossiers Totaux', value: (data.networkStats.totalRecords || 0).toLocaleString(), icon: Database, color: 'from-[#3BA7B8] to-[#58D6C3]' },
+              { label: 'Synchronisés', value: (data.networkStats.syncedRecords || 0).toLocaleString(), icon: CheckCircle2, color: 'from-[#4FAF8F] to-[#58D6C3]', trend: '+234' },
+              { label: 'En attente', value: (data.networkStats.pendingSync || 0).toString(), icon: Clock, color: 'from-[#F4B860] to-[#D96C6C]' },
+              { label: 'Latence Moy.', value: data.networkStats.avgLatency || '0ms', icon: Zap, color: 'from-[#0F4C5C] to-[#3BA7B8]' },
             ].map((stat, i) => (
               <Card key={i} className="relative overflow-hidden">
                 <div className={cn('absolute -top-4 -right-4 w-16 h-16 rounded-full blur-2xl opacity-30 bg-gradient-to-br', stat.color)} />
@@ -163,18 +182,18 @@ export default function Synchronization() {
                       >
                         <div className={cn(
                           'w-12 h-12 rounded-xl flex items-center justify-center shadow-soft transition-all',
-                          center.status === 'online' 
+                          center.status !== 'offline' 
                             ? 'bg-white hover:scale-110' 
                             : 'bg-[#EAF1F4]'
                         )}>
-                          <Server size={20} className={center.status === 'online' ? 'text-[#0F4C5C]' : 'text-[#5E7480]'} />
+                          <Server size={20} className={center.status !== 'offline' ? 'text-[#0F4C5C]' : 'text-[#5E7480]'} />
                         </div>
                         <div className={cn(
                           'absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white',
-                          center.status === 'online' ? 'bg-[#4FAF8F]' : 'bg-[#D96C6C]'
+                          center.status !== 'offline' ? 'bg-[#4FAF8F]' : 'bg-[#D96C6C]'
                         )} />
                         <p className="text-[10px] text-center mt-1 text-[#5E7480] font-medium whitespace-nowrap">
-                          {center.name.split(' ')[0]}
+                          {(center.nom || '').split(' ')[0]}
                         </p>
                       </div>
                     </div>
@@ -205,7 +224,7 @@ export default function Synchronization() {
               </Card.Header>
 
               <div className="space-y-3 max-h-72 overflow-y-auto">
-                {syncHistory.slice(0, 8).map((sync, index) => (
+                {data.history.map((sync, index) => (
                   <div 
                     key={sync.id}
                     className={cn(
@@ -215,9 +234,9 @@ export default function Synchronization() {
                   >
                     <div className={cn(
                       'w-8 h-8 rounded-lg flex items-center justify-center',
-                      sync.status === 'success' ? 'bg-[#4FAF8F]/10' : 'bg-[#D96C6C]/10'
+                      sync.status === 'success' || sync.status === 'acknowledged' ? 'bg-[#4FAF8F]/10' : 'bg-[#D96C6C]/10'
                     )}>
-                      {sync.status === 'success' ? (
+                      {sync.status === 'success' || sync.status === 'acknowledged' ? (
                         <CheckCircle2 size={16} className="text-[#4FAF8F]" />
                       ) : (
                         <AlertCircle size={16} className="text-[#D96C6C]" />
@@ -262,63 +281,14 @@ export default function Synchronization() {
             </Card.Header>
 
             <div className="grid grid-cols-3 gap-4">
-              {medicalCenters.map((center) => (
-                <div 
+              {data.centers.map((center) => (
+                <SyncStatusCard 
                   key={center.id}
-                  className={cn(
-                    'p-4 rounded-xl border-2 transition-all',
-                    center.syncStatus === 'synced' && 'border-[#4FAF8F]/30 bg-[#4FAF8F]/5',
-                    center.syncStatus === 'syncing' && 'border-[#3BA7B8]/30 bg-[#3BA7B8]/5',
-                    center.syncStatus === 'paused' && 'border-[#F4B860]/30 bg-[#F4B860]/5',
-                  )}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        'w-2 h-2 rounded-full',
-                        center.syncStatus === 'synced' && 'bg-[#4FAF8F]',
-                        center.syncStatus === 'syncing' && 'bg-[#3BA7B8] animate-pulse',
-                        center.syncStatus === 'paused' && 'bg-[#F4B860]',
-                      )} />
-                      <span className="font-medium text-[#1D2D35]">{center.name}</span>
-                    </div>
-                    <Badge variant={center.status === 'online' ? 'success' : 'warning'} className="text-xs">
-                      {center.status === 'online' ? 'En ligne' : 'Maintenance'}
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-[#5E7480]">Dossiers:</span>
-                      <span className="ml-1 font-semibold text-[#1D2D35]">{center.totalRecords}</span>
-                    </div>
-                    <div>
-                      <span className="text-[#5E7480]">Charge:</span>
-                      <span className={cn(
-                        'ml-1 font-semibold',
-                        center.serverLoad < 50 ? 'text-[#4FAF8F]' : center.serverLoad < 80 ? 'text-[#F4B860]' : 'text-[#D96C6C]'
-                      )}>{center.serverLoad}%</span>
-                    </div>
-                  </div>
-
-                  {/* Mini Progress Bar */}
-                  <div className="mt-3">
-                    <div className="flex justify-between text-xs text-[#5E7480] mb-1">
-                      <span>Dernière sync</span>
-                      <span>{center.lastSync}</span>
-                    </div>
-                    <div className="h-1.5 bg-[#EAF1F4] rounded-full overflow-hidden">
-                      <div 
-                        className={cn(
-                          'h-full rounded-full transition-all',
-                          center.syncStatus === 'synced' && 'bg-[#4FAF8F] w-full',
-                          center.syncStatus === 'syncing' && 'bg-[#3BA7B8] w-2/3 animate-pulse',
-                          center.syncStatus === 'paused' && 'bg-[#F4B860] w-1/3',
-                        )}
-                      />
-                    </div>
-                  </div>
-                </div>
+                  node={center.nom}
+                  status={center.sync_status || 'synced'}
+                  lastSync="Il y a 5 min"
+                  records={center.dossiers_count || 0}
+                />
               ))}
             </div>
           </Card>

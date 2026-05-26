@@ -8,6 +8,8 @@ import PatientDetails from './pages/PatientDetails'
 import AddPatient from './pages/AddPatient'
 import MedicalRecords from './pages/MedicalRecords'
 import RecordDetails from './pages/RecordDetails'
+import AddRecord from './pages/AddRecord'
+import EditRecord from './pages/EditRecord'
 import Consultations from './pages/Consultations'
 import AddConsultation from './pages/AddConsultation'
 import MedicalCenters from './pages/MedicalCenters'
@@ -18,9 +20,11 @@ import ActivityLogs from './pages/ActivityLogs'
 import Security from './pages/Security'
 import Settings from './pages/Settings'
 import ProtectedRoute from './components/ProtectedRoute'
+import { NotificationProvider } from './context/NotificationContext'
 
 function App() {
   return (
+    <NotificationProvider>
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<Home />} />
@@ -49,7 +53,7 @@ function App() {
       <Route
         path="/patients/add"
         element={
-          <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
+          <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist']}>
             <AddPatient />
           </ProtectedRoute>
         }
@@ -73,6 +77,22 @@ function App() {
         }
       />
       <Route
+        path="/records/add"
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+            <AddRecord />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/records/edit/:id"
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+            <EditRecord />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/records/:id"
         element={
           <ProtectedRoute allowedRoles={['admin', 'doctor', 'patient']}>
@@ -81,11 +101,11 @@ function App() {
         }
       />
 
-      {/* Consultations - Admin, Doctor */}
+      {/* Consultations - Admin, Doctor, Receptionist */}
       <Route
         path="/consultations"
         element={
-          <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+          <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist']}>
             <Consultations />
           </ProtectedRoute>
         }
@@ -93,7 +113,7 @@ function App() {
       <Route
         path="/consultations/add"
         element={
-          <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+          <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist']}>
             <AddConsultation />
           </ProtectedRoute>
         }
@@ -170,6 +190,7 @@ function App() {
       {/* Catch all - redirect to home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </NotificationProvider>
   )
 }
 

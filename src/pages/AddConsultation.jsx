@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Calendar, Clock, User, FileText, Save } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -6,19 +6,32 @@ import Topbar from '../components/Topbar'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
-import { patients, users } from '../data/mockData'
+import { patients as mockPatients, users as mockUsers } from '../data/mockData'
+import api from '../services/api'
+import { useToast } from '../context/ToastContext'
+import { useNotifications } from '../context/NotificationContext'
 
 export default function AddConsultation() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
+  const { addNotification } = useNotifications()
   const [formData, setFormData] = useState({
     patientId: '',
     doctorId: '',
+    centreId: '',
     date: '',
     time: '',
     type: '',
     duration: '30',
     notes: '',
+    symptomes: '',
+    diagnostic: '',
+    traitement: '',
   })
+  const [patients, setPatients] = useState([])
+  const [doctors, setDoctors] = useState([])
+  const [centres, setCentres] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
@@ -26,10 +39,66 @@ export default function AddConsultation() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    navigate('/consultations')
+    const payload = {
+      patient_id: formData.patientId,
+      medecin_id: formData.doctorId,
+      centre_medical_id: formData.centreId,
+      date: formData.date && formData.time ? `${formData.date} ${formData.time}:00` : formData.date,
+      motif: formData.type,
+      symptomes: formData.symptomes,
+      diagnostic: formData.diagnostic,
+      traitement: formData.traitement,
+      notes: formData.notes,
+    }
+
+    api.post('/consultations', payload)
+      .then(() => {
+        showToast('Consultation planifiée avec succès !')
+        const patientName = patients.find(p => String(p.id) === String(formData.patientId))?.name || 'Inconnu'
+        addNotification({
+          type: 'info',
+          message: `Nouvelle consultation planifiée pour ${patientName} le ${formData.date}.`,
+        })
+        navigate('/consultations')
+      })
+      .catch((err) => {
+        console.error('Erreur création consultation', err)
+        showToast(err.response?.data?.message || 'Erreur lors de la création', 'error')
+      })
   }
 
-  const doctors = users.filter(u => u.role === 'Médecin')
+  useEffect(() => {
+    let mounted = true
+    const loadData = async () => {
+      setLoading(true)
+      try {
+        // Charger patients, médecins et centres
+        const [patientsRes, doctorsRes, centresRes] = await Promise.all([
+          api.get('/patients?role=patient').catch(() => ({ data: [] })),
+          api.get('/doctors').catch(() => ({ data: [] })),
+          api.get('/centres-medicaux').catch(() => ({ data: [] }))
+        ])
+
+        if (mounted) {
+          setPatients(Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || []))
+          setDoctors(Array.isArray(doctorsRes.data) ? doctorsRes.data : (doctorsRes.data?.data || []))
+          setCentres(Array.isArray(centresRes.data) ? centresRes.data : (centresRes.data?.data || []))
+        }
+      } catch (err) {
+        console.error('Erreur chargement données', err)
+        if (mounted) {
+          alert("Erreur lors de la récupération des données de la base")
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+    loadData()
+    return () => { mounted = false }
+  }, [])
+
   const consultationTypes = ['Première consultation', 'Suivi', 'Urgence', 'Résultats', 'Contrôle']
 
   return (
@@ -63,7 +132,7 @@ export default function AddConsultation() {
                       <Card.Title>Patient et Médecin</Card.Title>
                     </div>
                   </Card.Header>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Patient</label>
                       <select
@@ -90,7 +159,22 @@ export default function AddConsultation() {
                       >
                         <option value="">Sélectionner un médecin</option>
                         {doctors.map(d => (
-                          <option key={d.id} value={d.id}>{d.name} - {d.specialty}</option>
+                          <option key={d.id} value={d.id}>{d.name} - {d.specialite || d.specialty}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Centre Médical</label>
+                      <select
+                        name="centreId"
+                        value={formData.centreId}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
+                        required
+                      >
+                        <option value="">Sélectionner un centre</option>
+                        {centres.map(c => (
+                          <option key={c.id} value={c.id}>{c.nom || c.name}</option>
                         ))}
                       </select>
                     </div>
@@ -164,6 +248,40 @@ export default function AddConsultation() {
                         ))}
                       </select>
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Symptômes</label>
+                        <textarea
+                          name="symptomes"
+                          value={formData.symptomes}
+                          onChange={handleChange}
+                          placeholder="Symptômes observés..."
+                          rows={3}
+                          className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] placeholder:text-[#5E7480] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Diagnostic</label>
+                        <textarea
+                          name="diagnostic"
+                          value={formData.diagnostic}
+                          onChange={handleChange}
+                          placeholder="Diagnostic médical..."
+                          rows={3}
+                          className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] placeholder:text-[#5E7480] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all resize-none"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Traitement</label>
+                      <input
+                        name="traitement"
+                        value={formData.traitement}
+                        onChange={handleChange}
+                        placeholder="Prescription et traitement..."
+                        className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] placeholder:text-[#5E7480] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
+                      />
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Notes</label>
                       <textarea
@@ -189,13 +307,13 @@ export default function AddConsultation() {
                     <div className="flex justify-between">
                       <span className="text-[#5E7480]">Patient</span>
                       <span className="font-medium text-[#1D2D35]">
-                        {formData.patientId ? patients.find(p => p.id === formData.patientId)?.name : '-'}
+                        {formData.patientId ? patients.find(p => String(p.id) === String(formData.patientId))?.name : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#5E7480]">Médecin</span>
                       <span className="font-medium text-[#1D2D35]">
-                        {formData.doctorId ? doctors.find(d => d.id === formData.doctorId)?.name : '-'}
+                        {formData.doctorId ? doctors.find(d => String(d.id) === String(formData.doctorId))?.name : '-'}
                       </span>
                     </div>
                     <div className="flex justify-between">

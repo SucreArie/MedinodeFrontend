@@ -15,6 +15,8 @@ import StatCard from '../components/StatCard'
 import Card from '../components/Card'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
+import Modal from '../components/Modal'
+import Input from '../components/Input'
 import {
   patients,
   stats,
@@ -24,6 +26,8 @@ import {
   analytics,
 } from '../data/mockData'
 import { getStatusColor, getStatusTextColor, cn } from '../utils/helpers'
+import { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 
 const iconMap = {
   FileText,
@@ -33,7 +37,34 @@ const iconMap = {
   Shield,
 }
 
+const initialForm = (user) => ({
+  name: user?.name || '',
+  email: user?.email || '',
+  phone: user?.phone || ''
+})
+
 export default function Dashboard() {
+  const { user, updateUser } = useAuth()
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [formData, setFormData] = useState(initialForm(user))
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false)
+    setSaveMessage('')
+    setFormData(initialForm(user))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    const result = await updateUser(formData)
+    setSaving(false)
+    setSaveMessage(result.success ? 'Informations mises à jour.' : result.message)
+    if (result.success) {
+      setTimeout(handleCloseModal, 1200)
+    }
+  }
   return (
     <DashboardLayout>
       {/* Page Header */}
@@ -42,8 +73,14 @@ export default function Dashboard() {
           Tableau de bord
         </h1>
         <p className="text-[#5E7480] mt-1">
-          Bienvenue Dr. Laurent, voici votre aperçu quotidien
+          Bienvenue {user?.name || 'Utilisateur'}, voici votre aperçu quotidien
         </p>
+        <div className="mt-4">
+          <Button variant="outline" size="small" onClick={() => setIsModalOpen(true)}>
+            <Edit size={16} />
+            Mes informations
+          </Button>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -269,6 +306,46 @@ export default function Dashboard() {
           </Card>
         </div>
       </div>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        title="Modifier mes informations"
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nom complet"
+            value={formData.name}
+            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            placeholder="Votre nom"
+          />
+          <Input
+            label="Email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
+            placeholder="votre.email@exemple.com"
+          />
+          <Input
+            label="Téléphone"
+            value={formData.phone}
+            onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+            placeholder="06 12 34 56 78"
+          />
+          {saveMessage && (
+            <p className="text-sm text-[#5E7480]">{saveMessage}</p>
+          )}
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="secondary" onClick={handleCloseModal}>
+              Annuler
+            </Button>
+            <Button onClick={handleSave} loading={saving}>
+              Enregistrer
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </DashboardLayout>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Settings as SettingsIcon, User, Bell, Shield, Database,
   Moon, Sun, Globe, Save, Upload
@@ -8,16 +8,17 @@ import Topbar from '../components/Topbar'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
+import { useAuth } from '../context/AuthContext'
 import { cn } from '../utils/helpers'
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile')
   const [profile, setProfile] = useState({
-    name: 'Dr. Thomas Laurent',
-    email: 'thomas.laurent@medinode.fr',
-    phone: '+33 6 11 22 33 44',
-    specialty: 'Cardiologie',
-    center: 'Paris Central',
+    name: '',
+    email: '',
+    phone: '',
+    specialty: '',
+    center: '',
   })
   const [notifications, setNotifications] = useState({
     email: true,
@@ -36,6 +37,27 @@ export default function Settings() {
     { id: 'security', label: 'Sécurité', icon: Shield },
     { id: 'system', label: 'Système', icon: Database },
   ]
+
+  const { user, fetchProfile, updateUser } = useAuth()
+  const [loadingProfile, setLoadingProfile] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      setLoadingProfile(true)
+      // Try to fetch from backend first
+      const res = await fetchProfile()
+      if (res.success && mounted) {
+        setProfile((p) => ({ ...p, ...res.data }))
+      } else if (user && mounted) {
+        // fallback to context user
+        setProfile((p) => ({ ...p, name: user.name || '', email: user.email || '', phone: user.phone || '', specialty: user.specialty || '', center: user.center || '' }))
+      }
+      setLoadingProfile(false)
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#F6FAFB]">
@@ -130,7 +152,22 @@ export default function Settings() {
                       />
                     </div>
                     <div className="mt-6 pt-6 border-t border-[#EAF1F4] flex justify-end">
-                      <Button>
+                      <Button
+                        onClick={async () => {
+                          // Use updateUser from context to persist and update global state
+                          const payload = {
+                            name: profile.name,
+                            email: profile.email,
+                            phone: profile.phone,
+                            specialty: profile.specialty,
+                            center: profile.center,
+                          }
+                          const res = await updateUser(payload)
+                          if (!res.success) {
+                            alert(res.message || 'Erreur lors de la sauvegarde')
+                          }
+                        }}
+                      >
                         <Save size={18} />
                         Enregistrer
                       </Button>

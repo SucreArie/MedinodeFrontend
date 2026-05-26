@@ -1,14 +1,21 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, User, Phone, Mail, MapPin, Heart, AlertTriangle, Save } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, User, Phone, Mail, MapPin, Heart, AlertTriangle, Save, Activity } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Input from '../components/Input'
+import api from '../services/api'
+import { useToast } from '../context/ToastContext'
+import { useNotifications } from '../context/NotificationContext'
 
 export default function AddPatient() {
+  const { id } = useParams()
   const navigate = useNavigate()
+  const { showToast } = useToast()
+  const { addNotification } = useNotifications()
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -26,16 +33,87 @@ export default function AddPatient() {
     insuranceId: '',
     condition: '',
     notes: '',
+    status: 'stable',
+    centre_medical_id: '',
   })
+  const [centres, setCentres] = useState([])
+
+  // Charger les données si nous sommes en mode modification
+  useEffect(() => {
+    const fetchCentres = async () => {
+      try {
+        const res = await api.get('/centres-medicaux')
+        setCentres(Array.isArray(res.data) ? res.data : (res.data?.data || []))
+      } catch (err) {
+        console.error("Erreur centres", err)
+      }
+    }
+    fetchCentres()
+
+    if (id) {
+      const fetchPatient = async () => {
+        try {
+          const response = await api.get(`/patients/${id}`)
+          const patient = response.data
+          const nameParts = (patient.name || '').split(' ')
+          setFormData({
+            ...formData,
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' ') || '',
+            email: patient.email || '',
+            phone: patient.telephone || '',
+            birthDate: patient.age || '', // On utilise le champ age de la DB
+            condition: patient.condition || '',
+            status: patient.status || 'stable',
+            centre_medical_id: patient.centre_medical_id || '',
+          })
+        } catch (error) {
+          showToast("Erreur lors du chargement des données", "error")
+        }
+      }
+      fetchPatient()
+    }
+  }, [id, showToast])
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Here you would save to backend
-    navigate('/patients')
+    setLoading(true)
+
+    const payload = {
+      name: `${formData.firstName} ${formData.lastName}`,
+      email: formData.email,
+      password: 'password123', // Mot de passe par défaut pour les patients créés par le personnel
+      role: 'patient',
+      telephone: formData.phone,
+      age: formData.birthDate,
+      condition: formData.condition,
+      status: formData.status,
+      etablissement: formData.city || 'Principal',
+      centre_medical_id: formData.centre_medical_id || null,
+    }
+
+    try {
+      if (id) {
+        await api.put(`/patients/${id}`, payload)
+        showToast('Patient mis à jour avec succès')
+      } else {
+        await api.post('/patients', payload)
+        showToast('Patient créé avec succès')
+        addNotification({
+          type: 'success',
+          message: `Nouveau patient ${payload.name} ajouté au système.`,
+        })
+      }
+      navigate('/patients')
+    } catch (err) {
+      showToast(err.response?.data?.message || "Erreur lors de l'enregistrement", "error")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -53,8 +131,8 @@ export default function AddPatient() {
               <ArrowLeft size={20} />
             </button>
             <div className="flex-1">
-              <h1 className="text-2xl font-heading font-bold text-[#1D2D35]">Nouveau Patient</h1>
-              <p className="text-[#5E7480]">Ajouter un nouveau patient au système</p>
+              <h1 className="text-2xl font-heading font-bold text-[#1D2D35]">{id ? 'Modifier Patient' : 'Nouveau Patient'}</h1>
+              <p className="text-[#5E7480]">{id ? 'Mettre à jour les informations du patient' : 'Ajouter un nouveau patient au système'}</p>
             </div>
           </div>
 
@@ -126,6 +204,21 @@ export default function AddPatient() {
                         <option value="M">Homme</option>
                         <option value="F">Femme</option>
                         <option value="O">Autre</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Centre Médical</label>
+                      <select
+                        name="centre_medical_id"
+                        value={formData.centre_medical_id}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
+                        required
+                      >
+                        <option value="">Sélectionner un centre</option>
+                        {centres.map(c => (
+                          <option key={c.id} value={c.id}>{c.nom || c.name}</option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -226,6 +319,31 @@ export default function AddPatient() {
                     </div>
                   </div>
                 </Card>
+
+                <Card>
+                  <Card.Header>
+                    <div className="flex items-center gap-2">
+                      <Activity size={20} className="text-[#3BA7B8]" />
+                      <Card.Title>Statut Actuel</Card.Title>
+                    </div>
+                  </Card.Header>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">État de santé</label>
+                      <select
+                        name="status"
+                        value={formData.status}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
+                        required
+                      >
+                        <option value="stable">Stable</option>
+                        <option value="monitoring">Surveillance</option>
+                        <option value="critical">Critique</option>
+                      </select>
+                    </div>
+                  </div>
+                </Card>
               </div>
 
               {/* Sidebar */}
@@ -269,7 +387,7 @@ export default function AddPatient() {
                 </Card>
 
                 <div className="flex flex-col gap-3">
-                  <Button type="submit" className="w-full">
+                  <Button type="submit" className="w-full" loading={loading}>
                     <Save size={18} />
                     Enregistrer le patient
                   </Button>

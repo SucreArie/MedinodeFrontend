@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Filter, Download, Users } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -8,16 +8,54 @@ import Button from '../components/Button'
 import SearchBar from '../components/SearchBar'
 import PatientTable from '../components/PatientTable'
 import Badge from '../components/Badge'
-import { patients } from '../data/mockData'
+import api from '../services/api'
+import Loader from '../components/Loader'
 
 export default function Patients() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [patients, setPatients] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const filteredPatients = patients.filter(patient => {
+  // Fonction pour calculer l'âge à partir d'une date de naissance (YYYY-MM-DD)
+  const calculateAge = (birthDate) => {
+    if (!birthDate) return 'N/A'
+    const birth = new Date(birthDate)
+    if (isNaN(birth.getTime())) return birthDate // Retourne la valeur brute si ce n'est pas une date valide
+    const today = new Date()
+    let age = today.getFullYear() - birth.getFullYear()
+    const m = today.getMonth() - birth.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--
+    }
+    return age
+  }
+
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const response = await api.get('/patients?role=patient')
+        // Transformation des données pour correspondre aux attentes du PatientTable
+        const mapped = (response.data || []).map(p => ({
+          ...p,
+          avatar: p.name ? p.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '??',
+          age: calculateAge(p.age), // On remplace la date de naissance par l'âge calculé
+          lastVisit: p.updated_at ? p.updated_at.split('T')[0] : 'N/A'
+        }))
+        setPatients(mapped)
+      } catch (error) {
+        console.error("Erreur lors du chargement des patients", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPatients()
+  }, [])
+
+  const filteredPatients = (patients || []).filter(patient => {
     const matchesSearch = patient.name.toLowerCase().includes(search.toLowerCase()) ||
-                          patient.id.toLowerCase().includes(search.toLowerCase())
+                          patient.id.toString().toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || patient.status === statusFilter
     return matchesSearch && matchesStatus
   })
@@ -133,10 +171,16 @@ export default function Patients() {
               <Card.Title>Liste des patients</Card.Title>
               <Badge variant="default">{filteredPatients.length} patients</Badge>
             </Card.Header>
-            <PatientTable 
-              patients={filteredPatients}
-              onRowClick={(patient) => navigate(`/patients/${patient.id}`)}
-            />
+            {loading ? (
+              <div className="py-20">
+                <Loader />
+              </div>
+            ) : (
+              <PatientTable 
+                patients={filteredPatients}
+                onRowClick={(patient) => navigate(`/patients/${patient.id}`)}
+              />
+            )}
           </Card>
         </main>
       </div>

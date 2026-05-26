@@ -71,6 +71,49 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const updateUser = async (updates) => {
+    if (!user) {
+      return {
+        success: false,
+        message: 'Utilisateur introuvable'
+      }
+    }
+
+    try {
+      // Backend exposes PUT /profile
+      const response = await api.put('/profile', updates)
+      const updatedUser = response.data.user || response.data || { ...user, ...updates }
+
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      setUser(updatedUser)
+      setRole(updatedUser.role || role)
+
+      return { success: true, data: updatedUser }
+    } catch (error) {
+      console.error('Erreur de mise à jour du profil:', error)
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Impossible de mettre à jour le profil'
+      }
+    }
+  }
+
+  const fetchProfile = async () => {
+    try {
+      const response = await api.get('/profile')
+      const fetched = response.data.user || response.data || null
+      if (fetched) {
+        localStorage.setItem('user', JSON.stringify(fetched))
+        setUser(fetched)
+        setRole(fetched.role || role)
+      }
+      return { success: true, data: fetched }
+    } catch (error) {
+      console.error('Erreur lors de la récupération du profil:', error)
+      return { success: false, message: error.response?.data?.message || 'Impossible de récupérer le profil' }
+    }
+  }
+
   // Fonction pour vérifier si l'utilisateur a un rôle
   const hasRole = (roles) => {
     if (!role) return false
@@ -92,6 +135,8 @@ export function AuthProvider({ children }) {
     loading,
     login,
     logout,
+    updateUser,
+    fetchProfile,
     hasRole,
     isAuthenticated
   }

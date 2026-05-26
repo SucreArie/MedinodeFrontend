@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Filter, Calendar, Clock, User, CheckCircle2, AlertCircle, PlayCircle } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -7,13 +8,19 @@ import Card from '../components/Card'
 import Button from '../components/Button'
 import SearchBar from '../components/SearchBar'
 import Badge from '../components/Badge'
-import { consultations } from '../data/mockData'
+import api from '../services/api'
 import { cn } from '../utils/helpers'
 
 export default function Consultations() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [doctorFilter, setDoctorFilter] = useState('all')
+  const [patientFilter, setPatientFilter] = useState('all')
+  const [consultationsData, setConsultationsData] = useState([])
+  const [patients, setPatients] = useState([])
+  const [doctors, setDoctors] = useState([])
+  const [loading, setLoading] = useState(false)
 
   const statusConfig = {
     scheduled: { label: 'Planifié', variant: 'default', icon: Clock, color: 'text-[#5E7480]' },
@@ -22,12 +29,62 @@ export default function Consultations() {
     cancelled: { label: 'Annulé', variant: 'error', icon: AlertCircle, color: 'text-[#D96C6C]' },
   }
 
-  const filteredConsultations = consultations.filter(c => {
+  const filteredConsultations = consultationsData.filter(c => {
     const matchesSearch = c.patientName.toLowerCase().includes(search.toLowerCase()) ||
                           c.doctorName.toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || c.status === statusFilter
-    return matchesSearch && matchesStatus
+    const matchesDoctor = doctorFilter === 'all' || String(c.doctorId) === String(doctorFilter)
+    const matchesPatient = patientFilter === 'all' || String(c.patientId) === String(patientFilter)
+    
+    return matchesSearch && matchesStatus && matchesDoctor && matchesPatient
   })
+
+  useEffect(() => {
+    let mounted = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        // Charger toutes les données nécessaires en parallèle
+        const [res, patientsRes, doctorsRes] = await Promise.all([
+          api.get('/consultations'),
+          api.get('/patients?role=patient'),
+          api.get('/doctors')
+        ])
+
+        if (!mounted) return
+        
+        const pData = Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || [])
+        const dData = Array.isArray(doctorsRes.data) ? doctorsRes.data : (doctorsRes.data?.data || [])
+        const data = Array.isArray(res.data) ? res.data : (res.data?.data || [])
+
+        setPatients(pData)
+        setDoctors(dData)
+
+        // Mapper les consultations avec les noms trouvés dans les listes
+        const mapped = data.map((c) => ({
+          id: c.id,
+          date: c.date ? c.date.split(' ')[0] : '',
+          time: (c.date && c.date.includes(' ')) ? c.date.split(' ')[1].slice(0,5) : '',
+          patientName: pData.find(p => String(p.id) === String(c.patient_id))?.name || c.patient_name || `#${c.patient_id}`,
+          patientId: c.patient_id,
+          doctorName: dData.find(d => String(d.id) === String(c.medecin_id))?.name || c.doctor_name || `#${c.medecin_id}`,
+          doctorId: c.medecin_id,
+          type: c.motif || c.type || '',
+          duration: c.duration || 30,
+          status: c.status || 'scheduled',
+          notes: c.notes || '',
+        }))
+
+        setConsultationsData(mapped)
+      } catch (error) {
+        console.error('Impossible de charger les consultations', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [])
 
   // Group by date
   const groupedByDate = filteredConsultations.reduce((acc, c) => {
@@ -59,11 +116,11 @@ export default function Consultations() {
           {/* Stats */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             <Card className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0F4C5C] to-[#3BA7B8] flex items-center justify-center">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#0F4C5C] to-[#3BA7B8] flex items-center justify-center">
                 <Calendar size={22} className="text-white" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[#1D2D35]">{consultations.length}</p>
+                <p className="text-2xl font-bold text-[#1D2D35]">{consultationsData.length}</p>
                 <p className="text-sm text-[#5E7480]">Total</p>
               </div>
             </Card>
@@ -72,7 +129,7 @@ export default function Consultations() {
                 <Clock size={22} className="text-[#5E7480]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[#1D2D35]">{consultations.filter(c => c.status === 'scheduled').length}</p>
+                <p className="text-2xl font-bold text-[#1D2D35]">{consultationsData.filter(c => c.status === 'scheduled').length}</p>
                 <p className="text-sm text-[#5E7480]">Planifiées</p>
               </div>
             </Card>
@@ -81,7 +138,7 @@ export default function Consultations() {
                 <PlayCircle size={22} className="text-[#3BA7B8]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[#1D2D35]">{consultations.filter(c => c.status === 'in-progress').length}</p>
+                <p className="text-2xl font-bold text-[#1D2D35]">{consultationsData.filter(c => c.status === 'in-progress').length}</p>
                 <p className="text-sm text-[#5E7480]">En cours</p>
               </div>
             </Card>
@@ -90,7 +147,7 @@ export default function Consultations() {
                 <CheckCircle2 size={22} className="text-[#4FAF8F]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[#1D2D35]">{consultations.filter(c => c.status === 'completed').length}</p>
+                <p className="text-2xl font-bold text-[#1D2D35]">{consultationsData.filter(c => c.status === 'completed').length}</p>
                 <p className="text-sm text-[#5E7480]">Terminées</p>
               </div>
             </Card>
@@ -98,13 +155,38 @@ export default function Consultations() {
 
           {/* Filters */}
           <Card className="mb-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4">
               <SearchBar 
                 value={search}
                 onChange={setSearch}
                 placeholder="Rechercher une consultation..."
                 className="w-80"
               />
+                <div className="flex items-center gap-3">
+                  <select
+                    value={patientFilter}
+                    onChange={(e) => setPatientFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-[#EAF1F4] bg-[#F6FAFB] text-sm text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20"
+                  >
+                    <option value="all">Tous les patients</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={doctorFilter}
+                    onChange={(e) => setDoctorFilter(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-[#EAF1F4] bg-[#F6FAFB] text-sm text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20"
+                  >
+                    <option value="all">Tous les médecins</option>
+                    {doctors.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
               <div className="flex items-center gap-2 bg-[#F6FAFB] rounded-xl p-1">
                 {['all', 'scheduled', 'in-progress', 'completed'].map((status) => (
                   <button

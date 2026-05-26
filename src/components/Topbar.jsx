@@ -7,7 +7,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import Badge from './Badge'
-import { alerts } from '../data/mockData'
+import NotificationPanel from './NotificationPanel'
 
 export default function Topbar() {
   const [showNotifications, setShowNotifications] = useState(false)
@@ -48,43 +48,10 @@ export default function Topbar() {
               className="relative p-2.5 rounded-xl hover:bg-[#EAF1F4] transition-colors"
             >
               <Bell size={20} className="text-[#5E7480]" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#D96C6C] rounded-full text-[10px] text-white font-medium flex items-center justify-center">
-                {alerts.length}
-              </span>
             </button>
 
             {/* Notifications Dropdown */}
-            {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-soft-lg border border-[#EAF1F4] overflow-hidden animate-fade-in">
-                <div className="p-4 border-b border-[#EAF1F4]">
-                  <h3 className="font-heading font-semibold text-[#1D2D35]">Notifications</h3>
-                </div>
-                <div className="max-h-72 overflow-y-auto">
-                  {alerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="p-4 border-b border-[#EAF1F4] last:border-0 hover:bg-[#F6FAFB] transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 mt-2 rounded-full ${
-                          alert.type === 'critical' ? 'bg-[#D96C6C]' :
-                          alert.type === 'warning' ? 'bg-[#F4B860]' : 'bg-[#3BA7B8]'
-                        }`} />
-                        <div className="flex-1">
-                          <p className="text-sm text-[#1D2D35]">{alert.message}</p>
-                          <p className="text-xs text-[#5E7480] mt-1">{alert.time}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="p-3 border-t border-[#EAF1F4]">
-                  <button className="w-full py-2 text-sm font-medium text-[#3BA7B8] hover:bg-[#3BA7B8]/10 rounded-lg transition-colors">
-                    Voir toutes les notifications
-                  </button>
-                </div>
-              </div>
-            )}
+            {showNotifications && <NotificationPanel onClose={() => setShowNotifications(false)} />}
           </div>
 
           {/* User Menu */}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Filter, Download, FileText, Search } from 'lucide-react'
 import Sidebar from '../components/Sidebar'
@@ -7,20 +7,37 @@ import Card from '../components/Card'
 import Button from '../components/Button'
 import SearchBar from '../components/SearchBar'
 import Badge from '../components/Badge'
-import { medicalRecords } from '../data/mockData'
+import api from '../services/api'
 import { cn } from '../utils/helpers'
 
 export default function MedicalRecords() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const types = ['all', 'Consultation', 'Analyse', 'Imagerie', 'ECG', 'Hospitalisation']
 
-  const filteredRecords = medicalRecords.filter(record => {
-    const matchesSearch = record.patientName.toLowerCase().includes(search.toLowerCase()) ||
-                          record.id.toLowerCase().includes(search.toLowerCase()) ||
-                          record.diagnosis.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    const fetchDossiers = async () => {
+      setLoading(true)
+      try {
+        const res = await api.get('/dossiers')
+        setRecords(res.data || [])
+      } catch (err) {
+        console.error("Erreur dossiers", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDossiers()
+  }, [])
+
+  const filteredRecords = records.filter(record => {
+    const matchesSearch = (record.patient?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                          String(record.id).includes(search.toLowerCase()) ||
+                          (record.description || '').toLowerCase().includes(search.toLowerCase())
     const matchesType = typeFilter === 'all' || record.type === typeFilter
     return matchesSearch && matchesType
   })
@@ -44,7 +61,7 @@ export default function MedicalRecords() {
               <h1 className="text-2xl font-heading font-bold text-[#1D2D35]">Dossiers Médicaux</h1>
               <p className="text-[#5E7480]">Gestion des dossiers et documents médicaux</p>
             </div>
-            <Button>
+            <Button onClick={() => navigate('/records/add')}>
               <Plus size={18} />
               Nouveau Dossier
             </Button>
@@ -53,10 +70,10 @@ export default function MedicalRecords() {
           {/* Stats */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             {[
-              { label: 'Total Dossiers', value: medicalRecords.length, color: 'from-[#0F4C5C] to-[#3BA7B8]' },
-              { label: 'Terminés', value: medicalRecords.filter(r => r.status === 'completed').length, color: 'from-[#4FAF8F] to-[#58D6C3]' },
-              { label: 'En attente', value: medicalRecords.filter(r => r.status === 'pending').length, color: 'from-[#F4B860] to-[#D96C6C]' },
-              { label: 'En cours', value: medicalRecords.filter(r => r.status === 'in-progress').length, color: 'from-[#3BA7B8] to-[#58D6C3]' },
+              { label: 'Total Dossiers', value: records.length, color: 'from-[#0F4C5C] to-[#3BA7B8]' },
+              { label: 'Consultations', value: records.length, color: 'from-[#4FAF8F] to-[#58D6C3]' },
+              { label: 'Analyses', value: 0, color: 'from-[#F4B860] to-[#D96C6C]' },
+              { label: 'Noeuds actifs', value: 1, color: 'from-[#3BA7B8] to-[#58D6C3]' },
             ].map((stat, i) => (
               <Card key={i} className="relative overflow-hidden">
                 <div className={cn('absolute top-0 right-0 w-20 h-20 rounded-full blur-2xl opacity-20 bg-gradient-to-br', stat.color)} />
@@ -114,18 +131,18 @@ export default function MedicalRecords() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-heading font-semibold text-[#1D2D35]">{record.type}</h3>
-                      <Badge variant={statusConfig[record.status]?.variant || 'default'}>
-                        {statusConfig[record.status]?.label || record.status}
+                      <h3 className="font-heading font-semibold text-[#1D2D35]">{record.name}</h3>
+                      <Badge variant="success">
+                        Terminé
                       </Badge>
                     </div>
-                    <p className="text-sm text-[#5E7480] mb-2 truncate">{record.diagnosis}</p>
+                    <p className="text-sm text-[#5E7480] mb-2 truncate">{record.description}</p>
                     <div className="flex items-center justify-between text-xs text-[#5E7480]">
-                      <span>{record.patientName}</span>
-                      <span>{record.date}</span>
+                      <span>{record.patient?.name}</span>
+                      <span>{record.date?.split(' ')[0]}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs text-[#5E7480] mt-1">
-                      <span>{record.doctor}</span>
+                      <span>Dr. {record.medecin?.name}</span>
                       <span className="font-mono">{record.id}</span>
                     </div>
                   </div>
