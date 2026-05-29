@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   Activity, Filter, Download, FileText, RefreshCw, 
   Shield, AlertTriangle, CheckCircle2, LogIn, LogOut,
@@ -10,18 +10,35 @@ import Card from '../components/Card'
 import Button from '../components/Button'
 import SearchBar from '../components/SearchBar'
 import Badge from '../components/Badge'
-import { activityLogs } from '../data/mockData'
 import { cn } from '../utils/helpers'
+import api from '../services/api'
+import Loader from '../components/Loader'
 
 export default function ActivityLogs() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [severityFilter, setSeverityFilter] = useState('all')
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const types = ['all', 'record', 'sync', 'access', 'security', 'update']
   const severities = ['all', 'info', 'success', 'warning', 'error', 'critical']
 
-  const filteredLogs = activityLogs.filter(log => {
+  const fetchLogs = async () => {
+    try {
+      setLoading(true)
+      const res = await api.get('/admin/activity-logs/all')
+      setLogs(res.data)
+    } catch (err) {
+      console.error("Erreur logs", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchLogs() }, [])
+
+  const filteredLogs = logs.filter(log => {
     const matchesSearch = log.description.toLowerCase().includes(search.toLowerCase()) ||
                           log.user.toLowerCase().includes(search.toLowerCase())
     const matchesType = typeFilter === 'all' || log.type === typeFilter
@@ -67,11 +84,11 @@ export default function ActivityLogs() {
           {/* Stats */}
           <div className="grid grid-cols-5 gap-4 mb-6">
             {[
-              { label: 'Total', value: activityLogs.length, color: 'from-[#0F4C5C] to-[#3BA7B8]' },
-              { label: 'Info', value: activityLogs.filter(l => l.severity === 'info').length, color: 'from-[#5E7480] to-[#1D2D35]' },
-              { label: 'Succès', value: activityLogs.filter(l => l.severity === 'success').length, color: 'from-[#4FAF8F] to-[#58D6C3]' },
-              { label: 'Alertes', value: activityLogs.filter(l => l.severity === 'warning').length, color: 'from-[#F4B860] to-[#D96C6C]' },
-              { label: 'Erreurs', value: activityLogs.filter(l => ['error', 'critical'].includes(l.severity)).length, color: 'from-[#D96C6C] to-[#F4B860]' },
+              { label: 'Total', value: logs.length, color: 'from-[#0F4C5C] to-[#3BA7B8]' },
+              { label: 'Info', value: logs.filter(l => l.severity === 'info').length, color: 'from-[#5E7480] to-[#1D2D35]' },
+              { label: 'Succès', value: logs.filter(l => l.severity === 'success').length, color: 'from-[#4FAF8F] to-[#58D6C3]' },
+              { label: 'Alertes', value: logs.filter(l => l.severity === 'warning').length, color: 'from-[#F4B860] to-[#D96C6C]' },
+              { label: 'Erreurs', value: logs.filter(l => ['error', 'critical'].includes(l.severity)).length, color: 'from-[#D96C6C] to-[#F4B860]' },
             ].map((stat, i) => (
               <Card key={i} className="relative overflow-hidden">
                 <div className={cn('absolute -top-4 -right-4 w-16 h-16 rounded-full blur-2xl opacity-30 bg-gradient-to-br', stat.color)} />
@@ -130,7 +147,12 @@ export default function ActivityLogs() {
             </Card.Header>
 
             <div className="space-y-1">
-              {filteredLogs.map((log, index) => {
+              {loading ? (
+                <div className="py-20"><Loader /></div>
+              ) : filteredLogs.length === 0 ? (
+                <div className="py-20 text-center text-[#5E7480]">Aucun log trouvé</div>
+              ) : (
+              filteredLogs.map((log, index) => {
                 const typeConf = typeConfig[log.type] || typeConfig.record
                 const sevConf = severityConfig[log.severity] || severityConfig.info
                 const Icon = typeConf.icon
@@ -174,7 +196,8 @@ export default function ActivityLogs() {
                     </div>
                   </div>
                 )
-              })}
+              })
+              )}
             </div>
           </Card>
         </main>

@@ -74,6 +74,18 @@ export default function Synchronization() {
     }
   }
 
+  const formatLastSync = (dateString) => {
+    if (!dateString) return 'Jamais'
+    const now = new Date()
+    const syncDate = new Date(dateString)
+    const diffInMinutes = Math.floor((now - syncDate) / 60000)
+    
+    if (diffInMinutes < 1) return "À l'instant"
+    if (diffInMinutes < 60) return `Il y a ${diffInMinutes} min`
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    return `Il y a ${diffInHours} h`
+  }
+
   const onlineCenters = data.centers || []
   const statCards = [
     { label: 'Dossiers Totaux', value: (data.networkStats.totalRecords || 0).toLocaleString(), icon: Database, color: 'from-[#3BA7B8] to-[#58D6C3]' },
@@ -148,33 +160,34 @@ export default function Synchronization() {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-6 mb-6">
-            <Card className="col-span-2">
+          <div className="space-y-6 mb-6">
+            {/* Network Topology - Full Width */}
+            <Card className="w-full">
               <Card.Header>
                 <div className="flex items-center gap-2">
-                  <Globe size={20} className="text-[#4FAF8F]" />
+                  <Globe size={22} className="text-[#4FAF8F]" />
                   <Card.Title>Topologie du Réseau</Card.Title>
                 </div>
                 <Badge variant="success">{onlineCenters.length} connectés</Badge>
               </Card.Header>
               
-              <div className="relative h-80 bg-slate-50/50 rounded-2xl overflow-hidden border border-slate-100 mb-4">
+              <div className="relative h-[450px] bg-slate-50/50 rounded-2xl overflow-hidden border border-slate-100 mb-4">
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                   <div className="relative">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#4FAF8F] to-[#58D6C3] flex items-center justify-center shadow-lg border-4 border-white">
-                      <Database size={32} className="text-white" />
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#4FAF8F] to-[#58D6C3] flex items-center justify-center shadow-lg border-4 border-white">
+                      <Database size={36} className="text-white" />
                     </div>
                     <div className="absolute inset-0 rounded-full bg-[#4FAF8F]/20 animate-ping" />
                   </div>
-                  <p className="text-center mt-2 text-[10px] font-bold text-[#0F4C5C] uppercase tracking-wider">MediNode Core</p>
+                  <p className="text-center mt-2 text-xs font-bold text-[#0F4C5C] uppercase tracking-wider">MediNode Core</p>
                 </div>
 
-                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 320 320">
+                <svg className="absolute inset-0 w-full h-full" viewBox="0 0 600 400">
                   {onlineCenters.map((center, index) => {
                     const angle = (index * 360) / onlineCenters.length
-                    const radius = 105
-                    const x = 160 + Math.cos((angle * Math.PI) / 180) * radius
-                    const y = 160 + Math.sin((angle * Math.PI) / 180) * radius
+                    const radius = 145
+                    const x = 300 + Math.cos((angle * Math.PI) / 180) * radius
+                    const y = 200 + Math.sin((angle * Math.PI) / 180) * radius
                     const isCurrentlySyncing = syncingCenterId === center.id && syncing
                     const isSynced = center.sync_status === 'synced' || !center.sync_status
 
@@ -182,8 +195,8 @@ export default function Synchronization() {
                       <g key={center.id}>
                         {/* Connection Line */}
                         <line
-                          x1="160"
-                          y1="160"
+                          x1="300"
+                          y1="200"
                           x2={x}
                           y2={y}
                           stroke={isCurrentlySyncing ? '#3BA7B8' : (isSynced ? '#4FAF8F' : '#CBD5E1')}
@@ -198,13 +211,13 @@ export default function Synchronization() {
                             <animateMotion 
                               dur={isCurrentlySyncing ? "1.5s" : "4s"} 
                               repeatCount="indefinite" 
-                              path={`M 160 160 L ${x} ${y}`} 
+                              path={`M 300 200 L ${x} ${y}`} 
                             />
                           </circle>
                         )}
 
                         {/* HTML Node overlays */}
-                        <foreignObject x={x - 50} y={y - 40} width="100" height="80">
+                        <foreignObject x={x - 60} y={y - 40} width="120" height="80">
                           <div 
                             className="flex flex-col items-center group cursor-help"
                             onMouseEnter={() => setHoveredCenterId(center.id)}
@@ -222,7 +235,7 @@ export default function Synchronization() {
                               'w-2 h-2 rounded-full mt-1 border border-white',
                               center.status !== 'offline' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-rose-500'
                             )} />
-                            <span className="text-[10px] font-bold text-slate-700 mt-1 uppercase tracking-tight text-center leading-none px-1">
+                            <span className="text-[11px] font-bold text-slate-700 mt-1 uppercase tracking-tight text-center leading-none px-1 drop-shadow-sm">
                               {center.nom}
                             </span>
                           </div>
@@ -234,7 +247,7 @@ export default function Synchronization() {
 
                 {/* Center Info Tooltip - S'affiche au survol */}
                 {hoveredCenterId && (
-                  <div className="absolute bottom-4 right-4 z-20 bg-white/95 backdrop-blur-sm p-4 rounded-2xl border border-[#EAF1F4] shadow-soft-lg animate-fade-in w-60">
+                  <div className="absolute top-4 right-4 z-20 bg-white/95 backdrop-blur-sm p-4 rounded-2xl border border-[#EAF1F4] shadow-soft-lg animate-fade-in w-60">
                     {(() => {
                       const c = data.centers.find(item => item.id === hoveredCenterId);
                       if (!c) return null;
@@ -270,7 +283,9 @@ export default function Synchronization() {
               </div>
             </Card>
 
-            <Card>
+            <div className="grid grid-cols-2 gap-6">
+              {/* Real-time Activity moved here */}
+              <Card>
               <Card.Header>
                 <div className="flex items-center gap-2">
                   <RefreshCw size={20} className="text-[#3BA7B8] animate-spin" style={{ animationDuration: '3s' }} />
@@ -302,48 +317,36 @@ export default function Synchronization() {
                         <ArrowRight size={12} />
                         <span className="font-medium text-[#1D2D35] truncate">{sync.to.split(' ')[0]}</span>
                       </div>
-                      <p className="text-xs text-[#5E7480]">{sync.records} fichiers - {sync.duration}</p>
+                      <p className="text-xs text-[#5E7480]">{sync.records} dossiers - {sync.duration}</p>
                     </div>
                     <span className="text-xs text-[#5E7480]">{sync.time}</span>
                   </div>
                 ))}
               </div>
             </Card>
-          </div>
 
-          <Card>
-            <Card.Header>
-              <div className="flex items-center gap-2">
-                <Server size={20} className="text-[#3BA7B8]" />
-                <Card.Title>État des Noeuds</Card.Title>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#4FAF8F]" />
-                  Synchronisé
-                </span>
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#3BA7B8] animate-pulse" />
-                  En cours
-                </span>
-                <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-[#F4B860]" />
-                  En pause
-                </span>
-              </div>
-            </Card.Header>
-            <div className="grid grid-cols-3 gap-4">
-              {data.centers.map((center) => (
-                <SyncStatusCard
-                  key={center.id}
-                  node={center.nom}
-                  status={center.sync_status || 'synced'}
-                  lastSync="Il y a 5 min"
-                  records={center.dossiers_count || 0}
-                />
-              ))}
+              {/* Node Status Grid moved here */}
+              <Card>
+                <Card.Header>
+                  <div className="flex items-center gap-2">
+                    <Server size={20} className="text-[#3BA7B8]" />
+                    <Card.Title>État des Noeuds</Card.Title>
+                  </div>
+                </Card.Header>
+                <div className="grid grid-cols-1 gap-4 max-h-72 overflow-y-auto pr-2">
+                  {data.centers.map((center) => (
+                    <SyncStatusCard
+                      key={center.id}
+                      node={center.nom}
+                      status={center.sync_status || 'synced'}
+                      lastSync={formatLastSync(center.synced_at)}
+                      records={center.dossiers_count || 0}
+                    />
+                  ))}
+                </div>
+              </Card>
             </div>
-          </Card>
+          </div>
 
           <Modal
             isOpen={isSyncModalOpen}

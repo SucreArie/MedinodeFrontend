@@ -27,7 +27,7 @@ export default function SyncStatusCard({ node, status, lastSync, records, classN
       </div>
       <div className="flex items-center justify-between">
         <span className={cn('text-xs font-medium', config.color)}>{config.label}</span>
-        <span className="text-sm font-semibold text-[#1D2D35]">{records} fichiers</span>
+        <span className="text-sm font-semibold text-[#1D2D35]">{records} dossiers</span>
       </div>
     </Card>
   )

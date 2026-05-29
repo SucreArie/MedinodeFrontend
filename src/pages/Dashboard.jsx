@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Edit,
   Shield,
+  CheckCircle2,
+  AlertCircle,
   MoreVertical,
 } from 'lucide-react'
 import DashboardLayout from '../layouts/DashboardLayout'
@@ -17,25 +19,14 @@ import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
-import {
-  patients,
-  stats,
-  syncStatus,
-  recentActivity,
-  alerts,
-  analytics,
-} from '../data/mockData'
+import { analytics } from '../data/mockData'
 import { getStatusColor, getStatusTextColor, cn } from '../utils/helpers'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-
-const iconMap = {
-  FileText,
-  RefreshCw,
-  AlertTriangle,
-  Edit,
-  Shield,
-}
+import { useNotifications } from '../context/NotificationContext'
+import { useNavigate } from 'react-router-dom'
+import api from '../services/api'
+import Loader from '../components/Loader'
 
 const initialForm = (user) => ({
   name: user?.name || '',
@@ -44,11 +35,66 @@ const initialForm = (user) => ({
 })
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const { user, updateUser } = useAuth()
+  const { notifications } = useNotifications()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [formData, setFormData] = useState(initialForm(user))
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
+  
+  // Real data states
+  const [loading, setLoading] = useState(true)
+  const [recentPatients, setRecentPatients] = useState([])
+  const [stats, setStats] = useState({
+    totalPatients: 0,
+    activeRecords: 0,
+    syncedNodes: 0,
+    pendingAlerts: 0,
+    uptime: '99.9%'
+  })
+  const [syncStatusData, setSyncStatusData] = useState([])
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      const [patientsRes, dossiersRes, syncRes] = await Promise.all([
+        api.get('/patients?role=patient'),
+        api.get('/dossiers'),
+        api.get('/admin/sync/dashboard').catch(() => ({ data: { networkStats: {}, centers: [] } }))
+      ])
+
+      const allPatients = Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || [])
+      const allDossiers = Array.isArray(dossiersRes.data) ? dossiersRes.data : (dossiersRes.data?.data || [])
+      const syncInfo = syncRes.data
+
+      // Sort and take last 10 patients
+      const sortedPatients = [...allPatients].sort((a, b) => b.id - a.id).slice(0, 10)
+      
+      setRecentPatients(sortedPatients)
+      setStats({
+        totalPatients: allPatients.length,
+        activeRecords: allDossiers.length,
+        syncedNodes: syncInfo.networkStats?.totalNodes || 0,
+        pendingAlerts: notifications.filter(n => n.type === 'critical' || n.type === 'error').length,
+        uptime: '99.97%',
+        monthlyGrowth: '+12%' // Simulation car non stocké en DB
+      })
+      
+      setSyncStatusData(syncInfo.centers || [])
+    } catch (err) {
+      console.error("Erreur chargement dashboard", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filter notifications to show only critical or warning alerts in the specific Alerts card
+  const activeAlerts = notifications.filter(n => n.type === 'critical' || n.type === 'error' || n.type === 'warning')
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [notifications]) // Re-fetch stats if notifications change (like new critical alerts)
 
   const handleCloseModal = () => {
     setIsModalOpen(false)
@@ -76,10 +122,10 @@ export default function Dashboard() {
           Bienvenue {user?.name || 'Utilisateur'}, voici votre aperçu quotidien
         </p>
         <div className="mt-4">
-          <Button variant="outline" size="small" onClick={() => setIsModalOpen(true)}>
+          {/* <Button variant="outline" size="small" onClick={() => setIsModalOpen(true)}>
             <Edit size={16} />
             Mes informations
-          </Button>
+          </Button> */}
         </div>
       </div>
 
@@ -91,16 +137,16 @@ export default function Dashboard() {
           subtitle="dans votre réseau"
           icon={Users}
           trend="up"
-          trendValue={stats.monthlyGrowth}
+          trendValue={stats.monthlyGrowth || '+0%'}
           color="primary"
         />
         <StatCard
           title="Dossiers Actifs"
           value={stats.activeRecords.toLocaleString()}
-          subtitle="en consultation"
+          subtitle="Dossiers DME créés"
           icon={FileText}
           trend="up"
-          trendValue="+8.2%"
+          trendValue="+4.1%"
           color="accent"
         />
         <StatCard
@@ -127,11 +173,14 @@ export default function Dashboard() {
           <Card>
             <Card.Header>
               <Card.Title>Patients Récents</Card.Title>
-              <Button variant="ghost" size="small" icon={ChevronRight} iconPosition="right">
+              <Button variant="ghost" size="small" icon={ChevronRight} iconPosition="right" onClick={() => navigate('/patients')}>
                 Voir tout
               </Button>
             </Card.Header>
             <div className="overflow-x-auto">
+              {loading ? (
+                <div className="py-12"><Loader /></div>
+              ) : (
               <table className="w-full">
                 <thead>
                   <tr className="text-left border-b border-[#EAF1F4]">
@@ -143,16 +192,16 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EAF1F4]">
-                  {patients.map((patient) => (
-                    <tr key={patient.id} className="hover:bg-[#F6FAFB] transition-colors">
+                  {recentPatients.map((patient) => (
+                    <tr key={patient.id} className="hover:bg-[#F6FAFB] transition-colors cursor-pointer" onClick={() => navigate(`/patients/${patient.id}`)}>
                       <td className="py-3">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#3BA7B8] to-[#58D6C3] flex items-center justify-center text-white text-xs font-semibold">
-                            {patient.avatar}
+                            {patient.name ? patient.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'P'}
                           </div>
                           <div>
                             <p className="text-sm font-medium text-[#1D2D35]">{patient.name}</p>
-                            <p className="text-xs text-[#5E7480]">{patient.age} ans, {patient.gender}</p>
+                            <p className="text-xs text-[#5E7480]">{patient.email}</p>
                           </div>
                         </div>
                       </td>
@@ -182,6 +231,7 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
           </Card>
 
@@ -214,20 +264,20 @@ export default function Dashboard() {
               <RefreshCw size={16} className="text-[#4FAF8F] animate-spin" style={{ animationDuration: '3s' }} />
             </Card.Header>
             <div className="space-y-3">
-              {syncStatus.map((node, i) => (
+              {syncStatusData.slice(0, 4).map((node, i) => (
                 <div
                   key={i}
                   className="flex items-center justify-between p-3 rounded-xl bg-[#F6FAFB] hover:bg-[#EAF1F4] transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={cn('w-2 h-2 rounded-full', getStatusColor(node.status))} />
+                    <div className={cn('w-2 h-2 rounded-full', node.status === 'offline' ? 'bg-[#D96C6C]' : 'bg-[#4FAF8F]')} />
                     <div>
-                      <p className="text-sm font-medium text-[#1D2D35]">{node.node}</p>
-                      <p className="text-xs text-[#5E7480]">{node.records} dossiers</p>
+                      <p className="text-sm font-medium text-[#1D2D35] truncate max-w-[120px]">{node.nom}</p>
+                      <p className="text-xs text-[#5E7480]">{node.dossiers_count || 0} dossiers</p>
                     </div>
                   </div>
-                  <span className={cn('text-xs font-medium', getStatusTextColor(node.status))}>
-                    {node.lastSync}
+                  <span className="text-xs font-medium text-[#5E7480]">
+                    {node.sync_status || 'synced'}
                   </span>
                 </div>
               ))}
@@ -238,40 +288,44 @@ export default function Dashboard() {
           <Card>
             <Card.Header>
               <Card.Title>Activité Récente</Card.Title>
-              <Button variant="ghost" size="small">Voir tout</Button>
+              <Button variant="ghost" size="small" onClick={() => navigate('/logs')}>Voir tout</Button>
             </Card.Header>
             <div className="space-y-4">
-              {recentActivity.slice(0, 5).map((activity, i) => {
-                const Icon = iconMap[activity.icon]
+              {notifications.length === 0 ? (
+                <p className="text-xs text-center text-[#5E7480] py-4">Aucune activité récente</p>
+              ) : (
+                notifications.slice(0, 5).map((activity, i) => {
+                const Icon = activity.type === 'critical' ? AlertTriangle : (activity.type === 'success' ? CheckCircle2 : FileText)
                 return (
                   <div key={i} className="flex items-start gap-3">
                     <div className={cn(
                       'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                      activity.type === 'alert' ? 'bg-[#D96C6C]/10' :
-                      activity.type === 'sync' ? 'bg-[#4FAF8F]/10' :
+                      activity.type === 'critical' ? 'bg-[#D96C6C]/10' :
+                      activity.type === 'success' ? 'bg-[#4FAF8F]/10' :
                       'bg-[#3BA7B8]/10'
                     )}>
                       {Icon && (
                         <Icon
                           size={16}
                           className={
-                            activity.type === 'alert' ? 'text-[#D96C6C]' :
-                            activity.type === 'sync' ? 'text-[#4FAF8F]' :
+                            activity.type === 'critical' ? 'text-[#D96C6C]' :
+                            activity.type === 'success' ? 'text-[#4FAF8F]' :
                             'text-[#3BA7B8]'
                           }
                         />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-[#1D2D35]">{activity.action}</p>
-                      <p className="text-xs text-[#5E7480] truncate">
-                        {activity.patient || activity.node || activity.user}
+                      <p className="text-sm text-[#1D2D35] line-clamp-1">{activity.message}</p>
+                      <p className="text-[10px] text-[#5E7480]">
+                        {activity.type.toUpperCase()}
                       </p>
                     </div>
                     <span className="text-xs text-[#5E7480] shrink-0">{activity.time}</span>
                   </div>
                 )
-              })}
+              })
+              )}
             </div>
           </Card>
 
@@ -282,10 +336,10 @@ export default function Dashboard() {
                 <AlertTriangle size={18} className="text-[#D96C6C]" />
                 Alertes Actives
               </Card.Title>
-              <Badge variant="danger">{alerts.length}</Badge>
+              <Badge variant="danger">{activeAlerts.length}</Badge>
             </Card.Header>
             <div className="space-y-3">
-              {alerts.map((alert) => (
+              {activeAlerts.map((alert) => (
                 <div
                   key={alert.id}
                   className={cn(
