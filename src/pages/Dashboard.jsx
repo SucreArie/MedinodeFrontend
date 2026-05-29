@@ -46,6 +46,7 @@ export default function Dashboard() {
   // Real data states
   const [loading, setLoading] = useState(true)
   const [recentPatients, setRecentPatients] = useState([])
+  const [weeklyVisits, setWeeklyVisits] = useState([])
   const [stats, setStats] = useState({
     totalPatients: 0,
     activeRecords: 0,
@@ -58,14 +59,16 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
-      const [patientsRes, dossiersRes, syncRes] = await Promise.all([
+      const [patientsRes, dossiersRes, syncRes, consultationsRes] = await Promise.all([
         api.get('/patients?role=patient'),
         api.get('/dossiers'),
-        api.get('/admin/sync/dashboard').catch(() => ({ data: { networkStats: {}, centers: [] } }))
+        api.get('/admin/sync/dashboard').catch(() => ({ data: { networkStats: {}, centers: [] } })),
+        api.get('/consultations').catch(() => ({ data: [] }))
       ])
 
       const allPatients = Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || [])
       const allDossiers = Array.isArray(dossiersRes.data) ? dossiersRes.data : (dossiersRes.data?.data || [])
+      const allConsultations = Array.isArray(consultationsRes.data) ? consultationsRes.data : (consultationsRes.data?.data || [])
       const syncInfo = syncRes.data
 
       // Sort and take last 10 patients
@@ -81,6 +84,25 @@ export default function Dashboard() {
         monthlyGrowth: '+12%' // Simulation car non stocké en DB
       })
       
+      // Logic to calculate visits for the current week
+      const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+      const now = new Date()
+      const currentDay = now.getDay() // 0 (Dim) to 6 (Sam)
+      const monday = new Date(now)
+      monday.setDate(now.getDate() - (currentDay === 0 ? 6 : currentDay - 1)) // Set to Monday
+
+      const weeklyData = []
+      for (let i = 0; i < 7; i++) {
+        const date = new Date(monday)
+        date.setDate(monday.getDate() + i)
+        const dateString = date.toISOString().split('T')[0]
+        const count = allConsultations.filter(c => c.date?.startsWith(dateString)).length
+        weeklyData.push({
+          day: days[date.getDay()],
+          visits: count
+        })
+      }
+      setWeeklyVisits(weeklyData)
       setSyncStatusData(syncInfo.centers || [])
     } catch (err) {
       console.error("Erreur chargement dashboard", err)
@@ -238,19 +260,22 @@ export default function Dashboard() {
           {/* Mini Analytics */}
           <Card>
             <Card.Header>
-              <Card.Title>Visites cette semaine</Card.Title>
-              <Badge variant="accent">+12% vs semaine dernière</Badge>
+              <Card.Title>Calendrier hebdomadaire</Card.Title>
+              <Badge variant="accent">Consultations planifiées</Badge>
             </Card.Header>
             <div className="h-48 flex items-end justify-between gap-2 mt-4">
-              {analytics.weeklyVisits.map((day, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-2">
+              {weeklyVisits.map((day, i) => {
+                const maxVisits = Math.max(...weeklyVisits.map(v => v.visits), 1)
+                return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-2 group relative">
                   <div
                     className="w-full bg-gradient-to-t from-[#3BA7B8] to-[#58D6C3] rounded-t-lg transition-all duration-500 hover:opacity-80"
-                    style={{ height: `${(day.visits / 65) * 100}%` }}
+                    style={{ height: `${(day.visits / (maxVisits + 2)) * 100}%`, minHeight: day.visits > 0 ? '4px' : '2px' }}
                   />
+                  <span className="absolute -top-6 text-[10px] font-bold text-[#3BA7B8] opacity-0 group-hover:opacity-100 transition-opacity">{day.visits}</span>
                   <span className="text-xs text-[#5E7480]">{day.day}</span>
                 </div>
-              ))}
+              )})}
             </div>
           </Card>
         </div>
