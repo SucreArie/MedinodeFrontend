@@ -12,8 +12,10 @@ import Badge from '../components/Badge'
 import Modal from '../components/Modal'
 import Input from '../components/Input'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 export default function RecordDetails() {
+  const { role } = useAuth()
   const { id } = useParams()
   const navigate = useNavigate()
   
@@ -124,10 +126,12 @@ export default function RecordDetails() {
                 <Download size={18} />
                 Télécharger
               </Button>
-              <Button onClick={() => navigate(`/records/edit/${id}`)}>
-                <Edit size={18} />
-                Modifier
-              </Button>
+              {role !== 'patient' && (
+                <Button onClick={() => navigate(`/records/edit/${id}`)}>
+                  <Edit size={18} />
+                  Modifier
+                </Button>
+              )}
             </div>
           </div>
 
@@ -272,7 +276,7 @@ export default function RecordDetails() {
                   <Card.Title>Actions</Card.Title>
                 </Card.Header>
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="outline" className="w-full justify-start" onClick={() => navigate('/patient/history')}>
                     <Eye size={18} />
                     Voir historique complet
                   </Button>

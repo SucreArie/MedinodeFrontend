@@ -14,6 +14,7 @@ import Consultations from './pages/Consultations'
 import AddConsultation from './pages/AddConsultation'
 import MedicalCenters from './pages/MedicalCenters'
 import Synchronization from './pages/Synchronization'
+import PatientMedicalHistory from './pages/PatientMedicalHistory'
 import Users from './pages/Users'
 import UserProfile from './pages/UserProfile'
 import ActivityLogs from './pages/ActivityLogs'
@@ -73,6 +74,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['admin', 'doctor', 'patient']}>
             <MedicalRecords />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/patient/history"
+        element={
+          <ProtectedRoute allowedRoles={['patient']}>
+            <PatientMedicalHistory />
           </ProtectedRoute>
         }
       />

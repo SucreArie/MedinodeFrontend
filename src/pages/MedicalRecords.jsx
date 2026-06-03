@@ -9,8 +9,10 @@ import SearchBar from '../components/SearchBar'
 import Badge from '../components/Badge'
 import api from '../services/api'
 import { cn } from '../utils/helpers'
+import { useAuth } from '../context/AuthContext'
 
 export default function MedicalRecords() {
+  const { role } = useAuth()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -23,8 +25,13 @@ export default function MedicalRecords() {
     const fetchDossiers = async () => {
       setLoading(true)
       try {
-        const res = await api.get('/dossiers')
-        setRecords(res.data || [])
+        const endpoint = role === 'patient' ? '/patient/medical-history' : '/dossiers'
+        const res = await api.get(endpoint)
+        
+        // Si c'est un patient, les dossiers sont dans res.data.dossiers
+        // Sinon (staff), res.data est directement le tableau
+        const data = role === 'patient' ? (res.data.dossiers || []) : (res.data || [])
+        setRecords(data)
       } catch (err) {
         console.error("Erreur dossiers", err)
       } finally {
@@ -32,7 +39,7 @@ export default function MedicalRecords() {
       }
     }
     fetchDossiers()
-  }, [])
+  }, [role])
 
   const filteredRecords = records.filter(record => {
     const matchesSearch = (record.patient?.name || '').toLowerCase().includes(search.toLowerCase()) ||

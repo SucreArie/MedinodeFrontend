@@ -43,6 +43,7 @@ const navItemsByRole = {
   patient: [
     { name: 'Tableau de bord', icon: LayoutDashboard, path: '/dashboard', roles: ['patient'] },
     { name: 'Mes dossiers', icon: FileText, path: '/records', roles: ['patient'] },
+    { name: 'Mon Parcours', icon: Activity, path: '/patient/history', roles: ['patient'] },
   ],
 }
 
