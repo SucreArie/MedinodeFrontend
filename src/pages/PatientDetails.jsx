@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { 
   ArrowLeft, Phone, Mail, MapPin, Heart, Droplets, AlertTriangle,
@@ -8,18 +9,110 @@ import Topbar from '../components/Topbar'
 import Card from '../components/Card'
 import Button from '../components/Button'
 import Badge from '../components/Badge'
-import { patients, patientTimeline, medicalRecords } from '../data/mockData'
 import { cn, getStatusColor } from '../utils/helpers'
+import api from '../services/api'
+import Loader from '../components/Loader'
+import { useToast } from '../context/ToastContext'
 
 export default function PatientDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
-  
-  const patient = patients.find(p => p.id === id)
-  const timeline = patientTimeline[id] || []
-  const records = medicalRecords.filter(r => r.patientId === id)
+  const { showToast } = useToast()
 
-  if (!patient) {
+  const [patient, setPatient] = useState(null)
+  const [timeline, setTimeline] = useState([])
+  const [records, setRecords] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Fonction pour calculer l'âge à partir d'une date de naissance (YYYY-MM-DD)
+  const calculateAge = (birthDate) => {
+    if (!birthDate) return 'N/A'
+    const birth = new Date(birthDate)
+    if (isNaN(birth.getTime())) return 'N/A'
+    const today = new Date()
+    let age = today.getFullYear() - birth.getFullYear()
+    const m = today.getMonth() - birth.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--
+    }
+    return age
+  }
+
+  useEffect(() => {
+    const fetchPatientDetails = async () => {
+      setLoading(true)
+      try {
+        const patientRes = await api.get(`/patients/${id}`)
+        const fetchedPatient = patientRes.data
+
+        // Vérification défensive: S'assurer que l'ID du patient récupéré correspond à l'ID demandé
+        // Ajout d'une vérification pour s'assurer que l'objet retourné est bien un patient (ex: présence de firstName)
+        // Note: On accepte firstName, first_name ou name pour être flexible
+        const hasName = fetchedPatient.firstName || fetchedPatient.first_name || fetchedPatient.name;
+        if (!fetchedPatient || String(fetchedPatient.id) !== String(id) || !hasName) {
+          console.error(
+            "Erreur: L'ID du patient récupéré ne correspond pas à l'ID demandé ou les données ne sont pas celles d'un patient.",
+            { requestedId: id, fetchedPatientId: fetchedPatient?.id, fetchedPatient }
+          );
+          showToast("Les données du patient ne correspondent pas à l'ID demandé ou sont invalides.", "error");
+          setPatient(null); // Empêche l'affichage de données incorrectes
+          setLoading(false);
+          return; // Arrête l'exécution de la fonction
+        }
+
+        // Normalisation pour gérer les différences entre camelCase et snake_case
+        const fName = fetchedPatient.firstName || fetchedPatient.first_name || '';
+        const lName = fetchedPatient.lastName || fetchedPatient.last_name || '';
+        const bDate = fetchedPatient.birthDate || fetchedPatient.birth_date || '';
+        const bType = fetchedPatient.bloodType || fetchedPatient.blood_type || 'N/A';
+        const insId = fetchedPatient.insuranceId || fetchedPatient.insurance_id || 'N/A';
+        const eName = fetchedPatient.emergencyName || fetchedPatient.emergency_name || '';
+        const ePhone = fetchedPatient.emergencyPhone || fetchedPatient.emergency_phone || '';
+
+        setPatient({
+          ...fetchedPatient,
+          name: fName && lName ? `${fName} ${lName}` : (fetchedPatient.name || 'Inconnu'),
+          age: calculateAge(bDate),
+          avatar: (fName || fetchedPatient.name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??',
+          // Assurez-vous que les allergies sont un tableau
+          allergies: typeof fetchedPatient.allergies === 'string' && fetchedPatient.allergies ? fetchedPatient.allergies.split(',').map(a => a.trim()) : fetchedPatient.allergies || [],
+          emergencyContact: `${eName} ${ePhone}`.trim() || 'Non renseigné',
+          bloodType: bType,
+          insuranceId: insId
+        })
+
+        // Récupérer les dossiers médicaux du patient
+        const recordsRes = await api.get(`/dossiers?patient_id=${id}`)
+        setRecords(recordsRes.data || [])
+
+        // Récupérer les consultations du patient pour la timeline
+        const consultationsRes = await api.get(`/consultations?patient_id=${id}`)
+        setTimeline(consultationsRes.data.map(c => ({
+          date: c.date ? c.date.split(' ')[0] : 'N/A', // Assurez-vous que c.date est une chaîne valide
+          type: 'consultation', // Type par défaut, à adapter si d'autres types existent
+          title: c.motif || 'Consultation',
+          doctor: c.medecin?.name || 'N/A',
+          description: c.notes || 'Aucune note',
+        })))
+      } catch (error) {
+        console.error("Erreur lors du chargement des détails du patient", error)
+        showToast("Impossible de charger les détails du patient", "error")
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPatientDetails()
+  }, [id, showToast])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F6FAFB] flex items-center justify-center">
+        <Loader />
+      </div>
+    )
+  }
+
+  if (!patient && !loading) {
     return (
       <div className="min-h-screen bg-[#F6FAFB] flex items-center justify-center">
         <Card className="text-center p-8">
@@ -152,7 +245,7 @@ export default function PatientDetails() {
                       <span className="text-sm font-medium text-[#D96C6C]">Allergies</span>
                     </div>
                     <div className="flex gap-2">
-                      {patient.allergies.map((allergy, i) => (
+                      {patient.allergies?.map((allergy, i) => (
                         <Badge key={i} variant="error">{allergy}</Badge>
                       ))}
                     </div>

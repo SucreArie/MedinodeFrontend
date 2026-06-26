@@ -11,6 +11,7 @@ import RecordDetails from './pages/RecordDetails'
 import AddRecord from './pages/AddRecord'
 import EditRecord from './pages/EditRecord'
 import Consultations from './pages/Consultations'
+import ConsultationDetails from './pages/ConsultationDetails'
 import AddConsultation from './pages/AddConsultation'
 import MedicalCenters from './pages/MedicalCenters'
 import Synchronization from './pages/Synchronization'
@@ -80,7 +81,7 @@ function App() {
       <Route
         path="/patient/history"
         element={
-          <ProtectedRoute allowedRoles={['patient']}>
+          <ProtectedRoute allowedRoles={['patient', 'doctor', 'admin']}>
             <PatientMedicalHistory />
           </ProtectedRoute>
         }
@@ -116,6 +117,14 @@ function App() {
         element={
           <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist']}>
             <Consultations />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/consultations/:id"
+        element={
+          <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+            <ConsultationDetails />
           </ProtectedRoute>
         }
       />

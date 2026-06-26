@@ -108,6 +108,7 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Role Selection */}
+            {/*
             <div>
               <label className="block text-sm font-medium text-[#1D2D35] mb-3">
                 Type de compte
@@ -142,6 +143,7 @@ export default function Register() {
                 ))}
               </div>
             </div>
+            */}
 
             <div className="grid grid-cols-2 gap-4">
               <Input

@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Edit,
   Shield,
+  Building2,
   CheckCircle2,
   AlertCircle,
   MoreVertical,
@@ -46,6 +47,9 @@ export default function Dashboard() {
   // Real data states
   const [loading, setLoading] = useState(true)
   const [recentPatients, setRecentPatients] = useState([])
+  const [patientConsultations, setPatientConsultations] = useState([])
+  const [patientDossiers, setPatientDossiers] = useState([])
+  const [patientCenter, setPatientCenter] = useState(null)
   const [weeklyVisits, setWeeklyVisits] = useState([])
   const [stats, setStats] = useState({
     totalPatients: 0,
@@ -59,44 +63,79 @@ export default function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
-      const [patientsRes, dossiersRes, syncRes, consultationsRes] = await Promise.all([
-        api.get('/patients?role=patient'),
-        api.get('/dossiers'),
-        api.get('/admin/sync/dashboard').catch(() => ({ data: { networkStats: {}, centers: [] } })),
-        api.get('/consultations').catch(() => ({ data: [] }))
-      ])
+      let dashboardConsultations = []
+      let syncInfo = { networkStats: {}, centers: [] }
+      let totalCenters = 0
 
-      const allPatients = Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || [])
-      const allDossiers = Array.isArray(dossiersRes.data) ? dossiersRes.data : (dossiersRes.data?.data || [])
-      const allConsultations = Array.isArray(consultationsRes.data) ? consultationsRes.data : (consultationsRes.data?.data || [])
-      const syncInfo = syncRes.data
+      if (user.role === 'patient') {
+        const historyRes = await api.get('/patient/medical-history')
+        const pData = historyRes.data;
+        
+        setPatientConsultations(pData.consultations || [])
+        setPatientDossiers(pData.dossiers || [])
+        setPatientCenter(pData.patient?.centre_medical || null)
+        dashboardConsultations = pData.consultations || []
+        totalCenters = pData.total_centers || 0
 
-      // Sort and take last 10 patients
-      const sortedPatients = [...allPatients].sort((a, b) => b.id - a.id).slice(0, 10)
-      
-      setRecentPatients(sortedPatients)
-      setStats({
-        totalPatients: allPatients.length,
-        activeRecords: allDossiers.length,
-        syncedNodes: syncInfo.networkStats?.totalNodes || 0,
-        pendingAlerts: notifications.filter(n => n.type === 'critical' || n.type === 'error').length,
-        uptime: '99.97%',
-        monthlyGrowth: '+12%' // Simulation car non stocké en DB
-      })
-      
+        setStats({
+          totalPatients: pData.consultations?.length || 0,
+          activeRecords: pData.dossiers?.length || 0,
+          syncedNodes: totalCenters, // For patient: total centers in system
+          pendingAlerts: notifications.filter(n => n.type === 'critical' || n.type === 'error').length,
+          uptime: 'N/A',
+          monthlyGrowth: 'N/A'
+        })
+      } else {
+        const [patientsRes, dossiersRes, syncRes, consultsRes] = await Promise.all([
+          api.get('/patients?role=patient'),
+          api.get('/dossiers'),
+          api.get('/admin/sync/dashboard').catch(() => ({ data: { networkStats: {}, centers: [] } })),
+          api.get('/consultations').catch(() => ({ data: [] }))
+        ])
+
+        const allPatients = Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || [])
+        const allDossiers = Array.isArray(dossiersRes.data) ? dossiersRes.data : (dossiersRes.data?.data || [])
+        dashboardConsultations = Array.isArray(consultsRes.data) ? consultsRes.data : (consultsRes.data?.data || [])
+        syncInfo = syncRes.data
+
+        // Sort and take last 10 patients
+        const sortedPatients = [...allPatients].sort((a, b) => b.id - a.id).slice(0, 10)
+        setRecentPatients(sortedPatients)
+
+        setStats({
+          totalPatients: allPatients.length,
+          activeRecords: allDossiers.length,
+          syncedNodes: syncInfo.networkStats?.totalNodes || 0,
+          pendingAlerts: notifications.filter(n => n.type === 'critical' || n.type === 'error').length,
+          uptime: '99.97%',
+          monthlyGrowth: '+12%' // Simulation car non stocké en DB
+        })
+      }
+
       // Logic to calculate visits for the current week
       const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
       const now = new Date()
       const currentDay = now.getDay() // 0 (Dim) to 6 (Sam)
       const monday = new Date(now)
       monday.setDate(now.getDate() - (currentDay === 0 ? 6 : currentDay - 1)) // Set to Monday
-
+      
       const weeklyData = []
       for (let i = 0; i < 7; i++) {
         const date = new Date(monday)
         date.setDate(monday.getDate() + i)
         const dateString = date.toISOString().split('T')[0]
-        const count = allConsultations.filter(c => c.date?.startsWith(dateString)).length
+        const count = dashboardConsultations.filter(c => {
+          const matchesDate = c.date && c.date.startsWith(dateString);
+          if (user.role === 'patient') {
+            // On accepte 'scheduled', 'Planifié' ou l'absence de statut pour les consultations à venir
+            const isScheduled = !c.status || c.status === 'scheduled' || c.status === 'Planifié';
+            const cDate = new Date(c.date);
+            // On compare à partir du début d'aujourd'hui pour inclure les rdv de la journée
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return matchesDate && isScheduled && cDate >= todayStart;
+          }
+          return matchesDate;
+        }).length
         weeklyData.push({
           day: days[date.getDay()],
           visits: count
@@ -113,7 +152,7 @@ export default function Dashboard() {
 
   // Filter notifications to show only critical or warning alerts in the specific Alerts card
   const activeAlerts = notifications.filter(n => n.type === 'critical' || n.type === 'error' || n.type === 'warning')
-
+  
   useEffect(() => {
     fetchDashboardData()
   }, [notifications]) // Re-fetch stats if notifications change (like new critical alerts)
@@ -153,38 +192,73 @@ export default function Dashboard() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-        <StatCard
-          title="Total Patients"
-          value={stats.totalPatients.toLocaleString()}
-          subtitle="dans votre réseau"
-          icon={Users}
-          trend="up"
-          trendValue={stats.monthlyGrowth || '+0%'}
-          color="primary"
-        />
-        <StatCard
-          title="Dossiers Actifs"
-          value={stats.activeRecords.toLocaleString()}
-          subtitle="Dossiers DME créés"
-          icon={FileText}
-          trend="up"
-          trendValue="+4.1%"
-          color="accent"
-        />
-        <StatCard
-          title="Nœuds Synchronisés"
-          value={stats.syncedNodes}
-          subtitle={`Uptime: ${stats.uptime}`}
-          icon={RefreshCw}
-          color="success"
-        />
-        <StatCard
-          title="Alertes en Attente"
-          value={stats.pendingAlerts}
-          subtitle="à traiter"
-          icon={AlertTriangle}
-          color="warning"
-        />
+        {user.role === 'patient' ? (
+          <>
+            <StatCard
+              title="Mes Consultations"
+              value={stats.totalPatients.toLocaleString()}
+              subtitle="planifiées ou passées"
+              icon={Users}
+              color="primary"
+            />
+            <StatCard
+              title="Mes Dossiers"
+              value={stats.activeRecords.toLocaleString()}
+              subtitle="Dossiers DME créés"
+              icon={FileText}
+              color="accent"
+            />
+            <StatCard
+              title="Mon Centre Médical"
+              value={patientCenter?.nom || 'Non assigné'}
+              subtitle={`Total centres: ${stats.syncedNodes}`}
+              icon={Building2}
+              color="success"
+            />
+            <StatCard
+              title="Alertes en Attente"
+              value={stats.pendingAlerts}
+              subtitle="à traiter"
+              icon={AlertTriangle}
+              color="warning"
+            />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Total Patients"
+              value={stats.totalPatients.toLocaleString()}
+              subtitle="dans votre réseau"
+              icon={Users}
+              trend="up"
+              trendValue={stats.monthlyGrowth || '+0%'}
+              color="primary"
+            />
+            <StatCard
+              title="Dossiers Actifs"
+              value={stats.activeRecords.toLocaleString()}
+              subtitle="Dossiers DME créés"
+              icon={FileText}
+              trend="up"
+              trendValue="+4.1%"
+              color="accent"
+            />
+            <StatCard
+              title="Nœuds Synchronisés"
+              value={stats.syncedNodes}
+              subtitle={`Uptime: ${stats.uptime}`}
+              icon={RefreshCw}
+              color="success"
+            />
+            <StatCard
+              title="Alertes en Attente"
+              value={stats.pendingAlerts}
+              subtitle="à traiter"
+              icon={AlertTriangle}
+              color="warning"
+            />
+          </>
+        )}
       </div>
 
       {/* Main Content Grid */}
@@ -192,8 +266,9 @@ export default function Dashboard() {
         {/* Left Column - 2/3 */}
         <div className="lg:col-span-2 space-y-6">
           {/* Recent Patients */}
-          <Card>
-            <Card.Header>
+          {user.role !== 'patient' && (
+            <Card>
+              <Card.Header>
               <Card.Title>Patients Récents</Card.Title>
               <Button variant="ghost" size="small" icon={ChevronRight} iconPosition="right" onClick={() => navigate('/patients')}>
                 Voir tout
@@ -253,9 +328,10 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
-              )}
+              )} 
             </div>
           </Card>
+          )}
 
           {/* Mini Analytics */}
           <Card>

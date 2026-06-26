@@ -55,15 +55,24 @@ export default function AddPatient() {
         try {
           const response = await api.get(`/patients/${id}`)
           const patient = response.data
-          const nameParts = (patient.name || '').split(' ')
           setFormData({
             ...formData,
-            firstName: nameParts[0] || '',
-            lastName: nameParts.slice(1).join(' ') || '',
+            firstName: patient.firstName || '', // Utiliser directement firstName
+            lastName: patient.lastName || '',   // Utiliser directement lastName
             email: patient.email || '',
-            phone: patient.telephone || '',
-            birthDate: patient.age || '', // On utilise le champ age de la DB
+            phone: patient.phone || '', 
+            birthDate: patient.birthDate || '',
+            gender: patient.gender || '',
+            address: patient.address || '',
+            city: patient.city || '',
+            postalCode: patient.postalCode || '',
+            bloodType: patient.bloodType || '',
+            allergies: patient.allergies || '',
+            emergencyName: patient.emergencyName || '',
+            emergencyPhone: patient.emergencyPhone || '',
+            insuranceId: patient.insuranceId || '',
             condition: patient.condition || '',
+            notes: patient.notes || '',
             status: patient.status || 'stable',
             centre_medical_id: patient.centre_medical_id || '',
           })
@@ -84,18 +93,28 @@ export default function AddPatient() {
     setLoading(true)
 
     const payload = {
-      name: `${formData.firstName} ${formData.lastName}`,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
       email: formData.email,
       password: 'password123', // Mot de passe par défaut pour les patients créés par le personnel
       role: 'patient',
-      telephone: formData.phone,
-      age: formData.birthDate,
+      phone: formData.phone,
+      birthDate: formData.birthDate,
+      gender: formData.gender,
+      address: formData.address,
+      city: formData.city,
+      postalCode: formData.postalCode, // Correction : correspond à la validation Laravel
+      bloodType: formData.bloodType,   // Correction : correspond à la validation Laravel
+      allergies: formData.allergies,
+      emergencyName: formData.emergencyName,   // Correction : correspond à la validation Laravel
+      emergencyPhone: formData.emergencyPhone, // Correction : correspond à la validation Laravel
+      insuranceId: formData.insuranceId,       // Correction : correspond à la validation Laravel
       condition: formData.condition,
+      notes: formData.notes,
       status: formData.status,
-      etablissement: formData.city || 'Principal',
       centre_medical_id: formData.centre_medical_id || null,
     }
-
+    
     try {
       if (id) {
         await api.put(`/patients/${id}`, payload)
@@ -104,8 +123,8 @@ export default function AddPatient() {
         await api.post('/patients', payload)
         showToast('Patient créé avec succès')
         addNotification({
-          type: 'success',
-          message: `Nouveau patient ${payload.name} ajouté au système.`,
+          type: 'success', // Correction: Utiliser firstName et lastName pour la notification
+          message: `Nouveau patient ${payload.firstName} ${payload.lastName} ajouté au système.`,
         })
       }
       navigate('/patients')
@@ -179,7 +198,7 @@ export default function AddPatient() {
                       type="tel"
                       value={formData.phone}
                       onChange={handleChange}
-                      placeholder="+33 6 12 34 56 78"
+                      placeholder="+229 01 XX XX XX XX"
                       icon={Phone}
                       required
                     />
@@ -213,7 +232,6 @@ export default function AddPatient() {
                         value={formData.centre_medical_id}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
-                        required
                       >
                         <option value="">Sélectionner un centre</option>
                         {centres.map(c => (
@@ -236,16 +254,18 @@ export default function AddPatient() {
                       label="Adresse"
                       name="address"
                       value={formData.address}
-                      onChange={handleChange}
+                      onChange={handleChange} // Bind to formData.address
                       placeholder="Numéro et nom de rue"
+                      required // Address should be required
                     />
                     <div className="grid grid-cols-2 gap-4">
                       <Input
                         label="Ville"
                         name="city"
                         value={formData.city}
-                        onChange={handleChange}
+                        onChange={handleChange} // Bind to formData.city
                         placeholder="Ville"
+                        required // City should be required
                       />
                       <Input
                         label="Code postal"
@@ -273,6 +293,7 @@ export default function AddPatient() {
                         value={formData.bloodType}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
+                      // Removed 'required' as it was causing issues if not selected initially
                       >
                         <option value="">Sélectionner</option>
                         <option value="A+">A+</option>
@@ -301,7 +322,7 @@ export default function AddPatient() {
                       </label>
                       <input
                         name="allergies"
-                        value={formData.allergies}
+                        value={formData.allergies} // Bind to formData.allergies
                         onChange={handleChange}
                         placeholder="Pénicilline, Latex, ..."
                         className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] placeholder:text-[#5E7480] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
@@ -335,7 +356,6 @@ export default function AddPatient() {
                         value={formData.status}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
-                        required
                       >
                         <option value="stable">Stable</option>
                         <option value="monitoring">Surveillance</option>
@@ -357,16 +377,16 @@ export default function AddPatient() {
                       label="Nom complet"
                       name="emergencyName"
                       value={formData.emergencyName}
-                      onChange={handleChange}
+                      onChange={handleChange} // Bind to formData.emergencyName
                       placeholder="Nom du contact"
                     />
                     <Input
                       label="Téléphone"
                       name="emergencyPhone"
                       type="tel"
-                      value={formData.emergencyPhone}
+                      value={formData.emergencyPhone} // Bind to formData.emergencyPhone
                       onChange={handleChange}
-                      placeholder="+33 6 XX XX XX XX"
+                      placeholder="+229 01 XX XX XX XX"
                       icon={Phone}
                     />
                   </div>
@@ -378,7 +398,7 @@ export default function AddPatient() {
                   </Card.Header>
                   <textarea
                     name="notes"
-                    value={formData.notes}
+                    value={formData.notes} // Bind to formData.notes
                     onChange={handleChange}
                     placeholder="Notes additionnelles..."
                     rows={4}

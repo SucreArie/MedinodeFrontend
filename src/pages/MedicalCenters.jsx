@@ -342,7 +342,7 @@ export default function MedicalCenters() {
             <Input label="Ville" value={formData.ville} onChange={e => setFormData({...formData, ville: e.target.value})} placeholder="ex: Cotonou" required />
             <Input label="Téléphone" value={formData.telephone} onChange={e => setFormData({...formData, telephone: e.target.value})} placeholder="ex: 229 ..." required />
           </div>
-          <Input label="Adresse" value={formData.adresse} onChange={e => setFormData({...formData, adresse: e.target.value})} placeholder="Lot 456, Avenue..." required />
+          <Input label="Adresse" value={formData.adresse} onChange={e => setFormData({...formData, adresse: e.target.value})} placeholder="Cotonou, apkapka..." required />
           
           <div className="pt-4 flex gap-3">
             <Button type="submit" className="flex-1" loading={submitting}>

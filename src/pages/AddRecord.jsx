@@ -45,13 +45,19 @@ export default function AddRecord() {
         api.get('/consultations'),
         api.get('/prescriptions'),
         api.get('/examens'),
-        api.get('/patients?role=patient'),
+        api.get('/patients'), // Supprimer le filtre par rôle
         api.get('/centres-medicaux')
       ])
       setConsultations(Array.isArray(consRes.data) ? consRes.data : (consRes.data?.data || []))
+      
+      // Mapper les patients pour construire le nom complet
+      const mappedPatients = (patientsRes.data || []).map(p => ({
+        ...p,
+        name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+      }));
       setPrescriptions(Array.isArray(prescRes.data) ? prescRes.data : (prescRes.data?.data || []))
       setExamens(Array.isArray(examRes.data) ? examRes.data : (examRes.data?.data || []))
-      setPatients(Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || []))
+      setPatients(mappedPatients);
       setCentres(Array.isArray(centresRes.data) ? centresRes.data : (centresRes.data?.data || []))
     } catch (err) {
       console.error("Erreur chargement options", err)

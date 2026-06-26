@@ -74,13 +74,19 @@ export default function AddConsultation() {
       try {
         // Charger patients, médecins et centres
         const [patientsRes, doctorsRes, centresRes] = await Promise.all([
-          api.get('/patients?role=patient').catch(() => ({ data: [] })),
+          api.get('/patients').catch(() => ({ data: [] })), // Supprimer le filtre par rôle
           api.get('/doctors').catch(() => ({ data: [] })),
           api.get('/centres-medicaux').catch(() => ({ data: [] }))
         ])
+        
+        // Mapper les patients pour construire le nom complet
+        const mappedPatients = (patientsRes.data || []).map(p => ({
+          ...p,
+          name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+        }));
 
         if (mounted) {
-          setPatients(Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || []))
+          setPatients(mappedPatients);
           setDoctors(Array.isArray(doctorsRes.data) ? doctorsRes.data : (doctorsRes.data?.data || []))
           setCentres(Array.isArray(centresRes.data) ? centresRes.data : (centresRes.data?.data || []))
         }
@@ -234,19 +240,15 @@ export default function AddConsultation() {
                   </Card.Header>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Type de consultation</label>
-                      <select
+                      <label className="block text-sm font-medium text-[#1D2D35] mb-1.5">Motif de consultation</label>
+                      <textarea
                         name="type"
                         value={formData.type}
                         onChange={handleChange}
-                        className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all"
-                        required
-                      >
-                        <option value="">Sélectionner un type</option>
-                        {consultationTypes.map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
-                      </select>
+                        placeholder="Motif de la consultation..."
+                        rows={2}
+                        className="w-full px-4 py-2.5 rounded-xl border border-[#EAF1F4] bg-white text-[#1D2D35] placeholder:text-[#5E7480] focus:outline-none focus:ring-2 focus:ring-[#3BA7B8]/20 focus:border-[#3BA7B8] transition-all resize-none"
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>

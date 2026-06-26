@@ -28,19 +28,43 @@ export default function MedicalRecords() {
         const endpoint = role === 'patient' ? '/patient/medical-history' : '/dossiers'
         const res = await api.get(endpoint)
         
-        // Si c'est un patient, les dossiers sont dans res.data.dossiers
-        // Sinon (staff), res.data est directement le tableau
-        const data = role === 'patient' ? (res.data.dossiers || []) : (res.data || [])
-        setRecords(data)
-      } catch (err) {
-        console.error("Erreur dossiers", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchDossiers()
-  }, [role])
+        const rawData = role === 'patient' ? (res.data.dossiers || []) : (res.data || [])
 
+        // Mapping robuste pour extraire le nom du patient
+        const mappedData = rawData.map(record => {
+          let patientName = 'Patient inconnu';
+
+          if (record.patient) {
+            const p = record.patient;
+            patientName = [
+              p.firstName || p.prenom || p.firstname || '',
+              p.lastName || p.nom || p.lastname || p.name || ''
+            ].filter(Boolean).join(' ').trim();
+          } 
+          else if (record.patient_name) {
+            patientName = record.patient_name;
+          } 
+          else if (record.patient_full_name) {
+            patientName = record.patient_full_name;
+          }
+
+          return {
+            ...record,
+            patientName: patientName,           // ← Ajout pour cohérence
+            patient: record.patient || { name: patientName }
+          };
+        });
+
+        setRecords(mappedData);
+      } catch (err) {
+        console.error("Erreur lors du chargement des dossiers", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDossiers();
+  }, [role]);
   const filteredRecords = records.filter(record => {
     const matchesSearch = (record.patient?.name || '').toLowerCase().includes(search.toLowerCase()) ||
                           String(record.id).includes(search.toLowerCase()) ||
@@ -68,10 +92,12 @@ export default function MedicalRecords() {
               <h1 className="text-2xl font-heading font-bold text-[#1D2D35]">Dossiers Médicaux</h1>
               <p className="text-[#5E7480]">Gestion des dossiers et documents médicaux</p>
             </div>
-            <Button onClick={() => navigate('/records/add')}>
-              <Plus size={18} />
-              Nouveau Dossier
-            </Button>
+            {role !== 'patient' && (
+              <Button onClick={() => navigate('/records/add')}>
+                <Plus size={18} />
+                Nouveau Dossier
+              </Button>
+            )}
           </div>
 
           {/* Stats */}
@@ -145,9 +171,9 @@ export default function MedicalRecords() {
                     </div>
                     <p className="text-sm text-[#5E7480] mb-2 truncate">{record.description}</p>
                     <div className="flex items-center justify-between text-xs text-[#5E7480]">
-                      <span>{record.patient?.name}</span>
-                      <span>{record.date?.split(' ')[0]}</span>
-                    </div>
+  <span>{record.patientName || record.patient?.name || 'Patient inconnu'}</span>
+  <span>{record.date?.split(' ')[0] || 'N/A'}</span>
+</div>
                     <div className="flex items-center justify-between text-xs text-[#5E7480] mt-1">
                       <span>Dr. {record.medecin?.name}</span>
                       <span className="font-mono">{record.id}</span>

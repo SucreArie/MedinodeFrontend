@@ -18,13 +18,13 @@ export default function Patients() {
   const [patients, setPatients] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Fonction pour calculer l'âge à partir d'une date de naissance (YYYY-MM-DD)
+  
   const calculateAge = (birthDate) => {
     if (!birthDate) return 'N/A'
-    const birth = new Date(birthDate)
-    if (isNaN(birth.getTime())) return birthDate // Retourne la valeur brute si ce n'est pas une date valide
+    const birth = new Date(birthDate) 
+    if (isNaN(birth.getTime())) return 'N/A' 
     const today = new Date()
-    let age = today.getFullYear() - birth.getFullYear()
+    let age = today.getFullYear() - birth.getFullYear() 
     const m = today.getMonth() - birth.getMonth()
     if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
       age--
@@ -35,12 +35,16 @@ export default function Patients() {
   useEffect(() => {
     const fetchPatients = async () => {
       try {
-        const response = await api.get('/patients?role=patient')
+        const response = await api.get('/patients') // Suppression du paramètre ?role=patient
         // Transformation des données pour correspondre aux attentes du PatientTable
         const mapped = (response.data || []).map(p => ({
           ...p,
-          avatar: p.name ? p.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '??',
-          age: calculateAge(p.age), // On remplace la date de naissance par l'âge calculé
+          name: p.firstName && p.lastName 
+            ? `${p.firstName} ${p.lastName}` 
+            : (p.name || (p.first_name ? `${p.first_name} ${p.last_name || ''}`.trim() : 'Inconnu')),
+          avatar: (p.firstName || p.name || p.first_name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '??',
+          age: calculateAge(p.birthDate || p.birth_date),
+          gender: p.gender, // Assurez-vous que le genre est inclus dans l'objet patient
           lastVisit: p.updated_at ? p.updated_at.split('T')[0] : 'N/A'
         }))
         setPatients(mapped)
@@ -54,7 +58,7 @@ export default function Patients() {
   }, [])
 
   const filteredPatients = (patients || []).filter(patient => {
-    const matchesSearch = patient.name.toLowerCase().includes(search.toLowerCase()) ||
+    const matchesSearch = (patient.name || '').toLowerCase().includes(search.toLowerCase()) ||
                           patient.id.toString().toLowerCase().includes(search.toLowerCase())
     const matchesStatus = statusFilter === 'all' || patient.status === statusFilter
     return matchesSearch && matchesStatus

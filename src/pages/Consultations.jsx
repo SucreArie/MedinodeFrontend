@@ -40,51 +40,59 @@ export default function Consultations() {
   })
 
   useEffect(() => {
-    let mounted = true
+    let mounted = true;
     const load = async () => {
-      setLoading(true)
+      setLoading(true);
       try {
-        // Charger toutes les données nécessaires en parallèle
-        const [res, patientsRes, doctorsRes] = await Promise.all([
+        const [consultationsRes, patientsRes, doctorsRes] = await Promise.all([
           api.get('/consultations'),
-          api.get('/patients?role=patient'),
+          api.get('/patients'),        // Utilise le bon endpoint
           api.get('/doctors')
-        ])
+        ]);
 
-        if (!mounted) return
-        
-        const pData = Array.isArray(patientsRes.data) ? patientsRes.data : (patientsRes.data?.data || [])
-        const dData = Array.isArray(doctorsRes.data) ? doctorsRes.data : (doctorsRes.data?.data || [])
-        const data = Array.isArray(res.data) ? res.data : (res.data?.data || [])
+        if (!mounted) return;
 
-        setPatients(pData)
-        setDoctors(dData)
+        const consultationsData = Array.isArray(consultationsRes.data) ? consultationsRes.data : [];
+        const patientsData = Array.isArray(patientsRes.data) ? patientsRes.data : [];
+        const doctorsData = Array.isArray(doctorsRes.data) ? doctorsRes.data : [];
 
-        // Mapper les consultations avec les noms trouvés dans les listes
-        const mapped = data.map((c) => ({
+        setPatients(patientsData);
+        setDoctors(doctorsData);
+
+        const mapped = consultationsData.map((c) => ({
           id: c.id,
           date: c.date ? c.date.split(' ')[0] : '',
           time: (c.date && c.date.includes(' ')) ? c.date.split(' ')[1].slice(0,5) : '',
-          patientName: pData.find(p => String(p.id) === String(c.patient_id))?.name || c.patient_name || `#${c.patient_id}`,
+          patientName: (() => {
+            const patient = c.patient || patientsData.find(p => String(p.id) === String(c.patient_id));
+            if (patient) {
+              return [
+                patient.firstName || patient.prenom || patient.firstname || '',
+                patient.lastName || patient.nom || patient.lastname || patient.name || ''
+              ].filter(Boolean).join(' ').trim() || patient.name || `#${c.patient_id}`;
+            }
+            return `#${c.patient_id || 'Inconnu'}`;
+          })(),
           patientId: c.patient_id,
-          doctorName: dData.find(d => String(d.id) === String(c.medecin_id))?.name || c.doctor_name || `#${c.medecin_id}`,
+          doctorName: doctorsData.find(d => String(d.id) === String(c.medecin_id))?.name || `#${c.medecin_id}`,
           doctorId: c.medecin_id,
-          type: c.motif || c.type || '',
-          duration: c.duration || 30,
+          type: c.motif || '',
+          duration: 30,
           status: c.status || 'scheduled',
           notes: c.notes || '',
-        }))
+        }));
 
-        setConsultationsData(mapped)
+        setConsultationsData(mapped);
       } catch (error) {
-        console.error('Impossible de charger les consultations', error)
+        console.error('Impossible de charger les consultations', error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    load()
-    return () => { mounted = false }
-  }, [])
+    };
+
+    load();
+    return () => { mounted = false };
+  }, []);
 
   // Group by date
   const groupedByDate = filteredConsultations.reduce((acc, c) => {
@@ -219,7 +227,19 @@ export default function Consultations() {
                   {dateConsultations.map((consultation) => {
                     const StatusIcon = statusConfig[consultation.status]?.icon || Clock
                     return (
-                      <Card key={consultation.id} hover className="cursor-pointer">
+                      <Card 
+                        key={consultation.id} 
+                        hover 
+                        className="cursor-pointer" 
+                        onClick={() => {
+                          console.log("Clic sur consultation ID:", consultation.id);
+                          if (consultation.id) {
+                            navigate(`/consultations/${consultation.id}`);
+                          } else {
+                            console.error("Erreur: ID de consultation manquant", consultation);
+                          }
+                        }}
+                      >
                         <div className="flex items-center gap-4">
                           {/* Time */}
                           <div className="w-20 text-center shrink-0">
